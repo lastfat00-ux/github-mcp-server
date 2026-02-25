@@ -424,6 +424,13 @@ func GetIssueComments(ctx context.Context, client *github.Client, cache *lockdow
 		comments = filteredComments
 	}
 
+	// Sanitize comment bodies
+	for _, comment := range comments {
+		if comment != nil && comment.Body != nil {
+			comment.Body = github.Ptr(sanitize.Sanitize(*comment.Body))
+		}
+	}
+
 	r, err := json.Marshal(comments)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -482,6 +489,18 @@ func GetSubIssues(ctx context.Context, client *github.Client, cache *lockdown.Re
 			}
 		}
 		subIssues = filteredSubIssues
+	}
+
+	// Sanitize sub-issue titles and bodies
+	for _, subIssue := range subIssues {
+		if subIssue != nil {
+			if subIssue.Title != nil {
+				subIssue.Title = github.Ptr(sanitize.Sanitize(*subIssue.Title))
+			}
+			if subIssue.Body != nil {
+				subIssue.Body = github.Ptr(sanitize.Sanitize(*subIssue.Body))
+			}
+		}
 	}
 
 	r, err := json.Marshal(subIssues)

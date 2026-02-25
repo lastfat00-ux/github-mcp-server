@@ -358,6 +358,55 @@ func Test_GetIssue(t *testing.T) {
 	}
 }
 
+func Test_GetIssueComments_Sanitization(t *testing.T) {
+	// Setup mock comments with malicious HTML
+	maliciousBody := "This is a comment with <script>alert('xss')</script> and <img src=x onerror=alert('xss')> and <b>bold</b>"
+	expectedBody := "This is a comment with  and <img src=\"x\"> and <b>bold</b>"
+
+	mockComments := []*github.IssueComment{
+		{
+			ID:   github.Ptr(int64(123)),
+			Body: github.Ptr(maliciousBody),
+			User: &github.User{
+				Login: github.Ptr("user1"),
+			},
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, mockComments),
+	})
+
+	client := github.NewClient(mockedClient)
+	deps := BaseDeps{
+		Client: client,
+	}
+
+	serverTool := IssueRead(translations.NullTranslationHelper)
+	handler := serverTool.Handler(deps)
+
+	request := createMCPRequest(map[string]interface{}{
+		"method":       "get_comments",
+		"owner":        "owner",
+		"repo":         "repo",
+		"issue_number": float64(42),
+	})
+
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError)
+
+	textContent := getTextResult(t, result)
+
+	var returnedComments []*github.IssueComment
+	err = json.Unmarshal([]byte(textContent.Text), &returnedComments)
+	require.NoError(t, err)
+	require.Len(t, returnedComments, 1)
+
+	assert.Equal(t, expectedBody, *returnedComments[0].Body)
+}
+
 func Test_AddIssueComment(t *testing.T) {
 	// Verify tool definition once
 	serverTool := AddIssueComment(translations.NullTranslationHelper)
