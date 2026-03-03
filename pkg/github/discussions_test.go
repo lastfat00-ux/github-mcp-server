@@ -493,6 +493,27 @@ func Test_ListDiscussions(t *testing.T) {
 	}
 }
 
+func Test_GetDiscussionSanitization(t *testing.T) {
+	toolDef := GetDiscussion(translations.NullTranslationHelper)
+	qGetDiscussion := "query($discussionNumber:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){number,title,body,createdAt,closed,isAnswered,answerChosenAt,url,category{name}}}}"
+	vars := map[string]interface{}{"owner": "owner", "repo": "repo", "discussionNumber": float64(1)}
+	mockResponse := githubv4mock.DataResponse(map[string]any{
+		"repository": map[string]any{"discussion": map[string]any{
+			"number": 1, "title": "<b>Bold</b>\u200B", "body": "<img src=x onerror=alert(1)>",
+			"url": "url", "createdAt": "2025-04-25T12:00:00Z", "closed": false, "isAnswered": false,
+			"category": map[string]any{"name": "General"},
+		}},
+	})
+	httpClient := githubv4mock.NewMockedHTTPClient(githubv4mock.NewQueryMatcher(qGetDiscussion, vars, mockResponse))
+	deps := BaseDeps{GQLClient: githubv4.NewClient(httpClient)}
+	req := createMCPRequest(map[string]interface{}{"owner": "owner", "repo": "repo", "discussionNumber": 1})
+	res, _ := toolDef.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+	var out map[string]interface{}
+	json.Unmarshal([]byte(getTextResult(t, res).Text), &out)
+	assert.Equal(t, "<b>Bold</b>", out["title"])
+	assert.Equal(t, "<img src=\"x\">", out["body"])
+}
+
 func Test_GetDiscussion(t *testing.T) {
 	// Verify tool definition and schema
 	toolDef := GetDiscussion(translations.NullTranslationHelper)
