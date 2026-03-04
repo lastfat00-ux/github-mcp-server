@@ -9,6 +9,7 @@ import (
 	"regexp"
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/utils"
 	"github.com/google/go-github/v79/github"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -99,6 +100,16 @@ func searchHandler(
 		return utils.NewToolResultErrorFromErr(errorPrefix, err), nil
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	// Sanitize results
+	for _, issue := range result.Issues {
+		if issue.Title != nil {
+			issue.Title = github.Ptr(sanitize.Sanitize(*issue.Title))
+		}
+		if issue.Body != nil {
+			issue.Body = github.Ptr(sanitize.Sanitize(*issue.Body))
+		}
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
