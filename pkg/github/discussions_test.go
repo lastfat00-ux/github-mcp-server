@@ -548,6 +548,30 @@ func Test_GetDiscussion(t *testing.T) {
 			},
 		},
 		{
+			name: "retrieval with sanitization",
+			response: githubv4mock.DataResponse(map[string]any{
+				"repository": map[string]any{"discussion": map[string]any{
+					"number":     2,
+					"title":      "Test <script>alert('xss')</script>Title",
+					"body":       "This is a <b>test</b> discussion <img src=x onerror=alert(1)>",
+					"url":        "https://github.com/owner/repo/discussions/2",
+					"createdAt":  "2025-04-25T12:00:00Z",
+					"closed":     false,
+					"isAnswered": false,
+					"category":   map[string]any{"name": "General"},
+				}},
+			}),
+			expectError: false,
+			expected: map[string]interface{}{
+				"number":     float64(2),
+				"title":      "Test Title",
+				"body":       "This is a <b>test</b> discussion <img src=\"x\">",
+				"url":        "https://github.com/owner/repo/discussions/2",
+				"closed":     false,
+				"isAnswered": false,
+			},
+		},
+		{
 			name:        "discussion not found",
 			response:    githubv4mock.ErrorResponse("discussion not found"),
 			expectError: true,
@@ -556,13 +580,23 @@ func Test_GetDiscussion(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			matcher := githubv4mock.NewQueryMatcher(qGetDiscussion, vars, tc.response)
+			currentVars := make(map[string]interface{})
+			for k, v := range vars {
+				currentVars[k] = v
+			}
+
+			discussionNumber := int32(1)
+			if tc.name == "retrieval with sanitization" {
+				discussionNumber = 2
+				currentVars["discussionNumber"] = float64(2)
+			}
+			matcher := githubv4mock.NewQueryMatcher(qGetDiscussion, currentVars, tc.response)
 			httpClient := githubv4mock.NewMockedHTTPClient(matcher)
 			gqlClient := githubv4.NewClient(httpClient)
 			deps := BaseDeps{GQLClient: gqlClient}
 			handler := toolDef.Handler(deps)
 
-			reqParams := map[string]interface{}{"owner": "owner", "repo": "repo", "discussionNumber": int32(1)}
+			reqParams := map[string]interface{}{"owner": "owner", "repo": "repo", "discussionNumber": discussionNumber}
 			req := createMCPRequest(reqParams)
 			res, err := handler(ContextWithDeps(context.Background(), deps), &req)
 			text := getTextResult(t, res).Text
