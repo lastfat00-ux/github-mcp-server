@@ -553,6 +553,31 @@ func Test_GetDiscussion(t *testing.T) {
 			expectError: true,
 			errContains: "discussion not found",
 		},
+		{
+			name: "sanitizes malicious content",
+			response: githubv4mock.DataResponse(map[string]any{
+				"repository": map[string]any{"discussion": map[string]any{
+					"number":     1,
+					"title":      "Malicious <script>alert('xss')</script> Title",
+					"body":       "Malicious <img src=x onerror=alert('xss')> Body",
+					"url":        "https://github.com/owner/repo/discussions/1",
+					"createdAt":  "2025-04-25T12:00:00Z",
+					"closed":     false,
+					"isAnswered": false,
+					"category":   map[string]any{"name": "General <script>alert('xss')</script>"},
+				}},
+			}),
+			expectError: false,
+			expected: map[string]interface{}{
+				"number":     float64(1),
+				"title":      "Malicious  Title",
+				"body":       "Malicious <img src=\"x\"> Body",
+				"url":        "https://github.com/owner/repo/discussions/1",
+				"closed":     false,
+				"isAnswered": false,
+				"category":   "General ",
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -585,7 +610,11 @@ func Test_GetDiscussion(t *testing.T) {
 			// Check category is present
 			category, ok := out["category"].(map[string]interface{})
 			require.True(t, ok)
-			assert.Equal(t, "General", category["name"])
+			if tc.name == "sanitizes malicious content" {
+				assert.Equal(t, tc.expected["category"], category["name"])
+			} else {
+				assert.Equal(t, "General", category["name"])
+			}
 		})
 	}
 }
