@@ -493,6 +493,170 @@ func Test_ListDiscussions(t *testing.T) {
 	}
 }
 
+func Test_DiscussionsSanitization(t *testing.T) {
+	// 1. Test GetDiscussion sanitization
+	t.Run("GetDiscussion sanitizes title and body", func(t *testing.T) {
+		toolDef := GetDiscussion(translations.NullTranslationHelper)
+		qGetDiscussion := "query($discussionNumber:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){number,title,body,createdAt,closed,isAnswered,answerChosenAt,url,category{name}}}}"
+		vars := map[string]interface{}{
+			"owner":            "owner",
+			"repo":             "repo",
+			"discussionNumber": float64(1),
+		}
+
+		maliciousTitle := "Title <script>alert('xss')</script>"
+		maliciousBody := "Body <img src=x onerror=alert('xss')>"
+
+		response := githubv4mock.DataResponse(map[string]any{
+			"repository": map[string]any{"discussion": map[string]any{
+				"number":     1,
+				"title":      maliciousTitle,
+				"body":       maliciousBody,
+				"url":        "https://github.com/owner/repo/discussions/1",
+				"createdAt":  "2025-04-25T12:00:00Z",
+				"closed":     false,
+				"isAnswered": false,
+				"category":   map[string]any{"name": "General <script>alert('xss')</script>"},
+			}},
+		})
+
+		matcher := githubv4mock.NewQueryMatcher(qGetDiscussion, vars, response)
+		httpClient := githubv4mock.NewMockedHTTPClient(matcher)
+		gqlClient := githubv4.NewClient(httpClient)
+		deps := BaseDeps{GQLClient: gqlClient}
+		handler := toolDef.Handler(deps)
+
+		reqParams := map[string]interface{}{"owner": "owner", "repo": "repo", "discussionNumber": int32(1)}
+		req := createMCPRequest(reqParams)
+		res, err := handler(ContextWithDeps(context.Background(), deps), &req)
+		require.NoError(t, err)
+		text := getTextResult(t, res).Text
+
+		var out map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(text), &out))
+
+		assert.NotContains(t, out["title"], "<script>")
+		assert.NotContains(t, out["body"], "onerror")
+		category := out["category"].(map[string]interface{})
+		assert.NotContains(t, category["name"], "<script>")
+	})
+
+	// 2. Test GetDiscussionComments sanitization
+	t.Run("GetDiscussionComments sanitizes body", func(t *testing.T) {
+		toolDef := GetDiscussionComments(translations.NullTranslationHelper)
+		qGetComments := "query($after:String$discussionNumber:Int!$first:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){comments(first: $first, after: $after){nodes{body},pageInfo{hasNextPage,hasPreviousPage,startCursor,endCursor},totalCount}}}}"
+		vars := map[string]interface{}{
+			"owner":            "owner",
+			"repo":             "repo",
+			"discussionNumber": float64(1),
+			"first":            float64(30),
+			"after":            (*string)(nil),
+		}
+
+		mockResponse := githubv4mock.DataResponse(map[string]any{
+			"repository": map[string]any{
+				"discussion": map[string]any{
+					"comments": map[string]any{
+						"nodes": []map[string]any{
+							{"body": "Comment <script>alert('xss')</script>"},
+						},
+						"pageInfo": map[string]any{
+							"hasNextPage":     false,
+							"hasPreviousPage": false,
+							"startCursor":     "",
+							"endCursor":       "",
+						},
+						"totalCount": 1,
+					},
+				},
+			},
+		})
+
+		matcher := githubv4mock.NewQueryMatcher(qGetComments, vars, mockResponse)
+		httpClient := githubv4mock.NewMockedHTTPClient(matcher)
+		gqlClient := githubv4.NewClient(httpClient)
+		deps := BaseDeps{GQLClient: gqlClient}
+		handler := toolDef.Handler(deps)
+
+		reqParams := map[string]interface{}{
+			"owner":            "owner",
+			"repo":             "repo",
+			"discussionNumber": int32(1),
+		}
+		request := createMCPRequest(reqParams)
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+
+		textContent := getTextResult(t, result)
+		var response struct {
+			Comments []*github.IssueComment `json:"comments"`
+		}
+		err = json.Unmarshal([]byte(textContent.Text), &response)
+		require.NoError(t, err)
+
+		assert.NotContains(t, *response.Comments[0].Body, "<script>")
+	})
+
+	// 3. Test ListDiscussions sanitization (via fragmentToDiscussion)
+	t.Run("ListDiscussions sanitizes title", func(t *testing.T) {
+		toolDef := ListDiscussions(translations.NullTranslationHelper)
+		qBasicNoOrder := "query($after:String$first:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussions(first: $first, after: $after){nodes{number,title,createdAt,updatedAt,closed,isAnswered,answerChosenAt,author{login},category{name},url},pageInfo{hasNextPage,hasPreviousPage,startCursor,endCursor},totalCount}}}"
+		vars := map[string]interface{}{
+			"owner": "owner",
+			"repo":  "repo",
+			"first": float64(30),
+			"after": (*string)(nil),
+		}
+
+		mockResponse := githubv4mock.DataResponse(map[string]any{
+			"repository": map[string]any{
+				"discussions": map[string]any{
+					"nodes": []map[string]any{
+						{
+							"number":     1,
+							"title":      "Discussion <script>alert('xss')</script>",
+							"createdAt":  "2023-01-01T00:00:00Z",
+							"updatedAt":  "2023-01-01T00:00:00Z",
+							"closed":     false,
+							"isAnswered": false,
+							"author":     map[string]any{"login": "user1"},
+							"url":        "https://github.com/owner/repo/discussions/1",
+							"category":   map[string]any{"name": "General"},
+						},
+					},
+					"pageInfo": map[string]any{
+						"hasNextPage":     false,
+						"hasPreviousPage": false,
+						"startCursor":     "",
+						"endCursor":       "",
+					},
+					"totalCount": 1,
+				},
+			},
+		})
+
+		matcher := githubv4mock.NewQueryMatcher(qBasicNoOrder, vars, mockResponse)
+		httpClient := githubv4mock.NewMockedHTTPClient(matcher)
+		gqlClient := githubv4.NewClient(httpClient)
+		deps := BaseDeps{GQLClient: gqlClient}
+		handler := toolDef.Handler(deps)
+
+		reqParams := map[string]interface{}{"owner": "owner", "repo": "repo"}
+		req := createMCPRequest(reqParams)
+		res, err := handler(ContextWithDeps(context.Background(), deps), &req)
+		require.NoError(t, err)
+		text := getTextResult(t, res).Text
+
+		var response struct {
+			Discussions []*github.Discussion `json:"discussions"`
+		}
+		err = json.Unmarshal([]byte(text), &response)
+		require.NoError(t, err)
+
+		assert.NotContains(t, *response.Discussions[0].Title, "<script>")
+	})
+}
+
 func Test_GetDiscussion(t *testing.T) {
 	// Verify tool definition and schema
 	toolDef := GetDiscussion(translations.NullTranslationHelper)
