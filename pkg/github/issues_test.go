@@ -1879,6 +1879,32 @@ func Test_GetIssueComments(t *testing.T) {
 			expectedErrMsg: "failed to get issue comments",
 		},
 		{
+			name: "sanitization - remove script tags",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, []*github.IssueComment{
+					{
+						ID:   github.Ptr(int64(123)),
+						Body: github.Ptr("Comment with <script>alert('xss')</script> tag"),
+						User: &github.User{Login: github.Ptr("user1")},
+					},
+				}),
+			}),
+			requestArgs: map[string]interface{}{
+				"method":       "get_comments",
+				"owner":        "owner",
+				"repo":         "repo",
+				"issue_number": float64(42),
+			},
+			expectError: false,
+			expectedComments: []*github.IssueComment{
+				{
+					ID:   github.Ptr(int64(123)),
+					Body: github.Ptr("Comment with  tag"),
+					User: &github.User{Login: github.Ptr("user1")},
+				},
+			},
+		},
+		{
 			name: "lockdown enabled filters comments without push access",
 			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
 				GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, []*github.IssueComment{
