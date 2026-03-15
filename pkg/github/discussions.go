@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -94,10 +95,13 @@ type WithCategoryNoOrder struct {
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
 
+// fragmentToDiscussion converts a GraphQL NodeFragment to a github.Discussion object.
+// It sanitizes user-contributed fields to prevent XSS vulnerabilities, consistent with Issue and Pull Request handling.
 func fragmentToDiscussion(fragment NodeFragment) *github.Discussion {
 	return &github.Discussion{
 		Number:    github.Ptr(int(fragment.Number)),
-		Title:     github.Ptr(string(fragment.Title)),
+		// Sanitize title to prevent XSS. Note: This may filter some technical Markdown/HTML.
+		Title:     github.Ptr(sanitize.Sanitize(string(fragment.Title))),
 		HTMLURL:   github.Ptr(string(fragment.URL)),
 		CreatedAt: &github.Timestamp{Time: fragment.CreatedAt.Time},
 		UpdatedAt: &github.Timestamp{Time: fragment.UpdatedAt.Time},
@@ -105,7 +109,7 @@ func fragmentToDiscussion(fragment NodeFragment) *github.Discussion {
 			Login: github.Ptr(string(fragment.Author.Login)),
 		},
 		DiscussionCategory: &github.DiscussionCategory{
-			Name: github.Ptr(string(fragment.Category.Name)),
+			Name: github.Ptr(sanitize.Sanitize(string(fragment.Category.Name))),
 		},
 	}
 }
@@ -352,16 +356,18 @@ func GetDiscussion(t translations.TranslationHelperFunc) inventory.ServerTool {
 			// The go-github library's Discussion type lacks isAnswered and answerChosenAt fields,
 			// so we use map[string]interface{} for the response (consistent with other functions
 			// like ListDiscussions and GetDiscussionComments).
+			// We sanitize user-contributed fields (Title, Body, Category Name) to prevent XSS.
 			response := map[string]interface{}{
-				"number":     int(d.Number),
-				"title":      string(d.Title),
-				"body":       string(d.Body),
+				"number": int(d.Number),
+				// Sanitize title and body to prevent XSS. Note: This may filter some technical Markdown/HTML.
+				"title":      sanitize.Sanitize(string(d.Title)),
+				"body":       sanitize.Sanitize(string(d.Body)),
 				"url":        string(d.URL),
 				"closed":     bool(d.Closed),
 				"isAnswered": bool(d.IsAnswered),
 				"createdAt":  d.CreatedAt.Time,
 				"category": map[string]interface{}{
-					"name": string(d.Category.Name),
+					"name": sanitize.Sanitize(string(d.Category.Name)),
 				},
 			}
 
@@ -482,7 +488,7 @@ func GetDiscussionComments(t translations.TranslationHelperFunc) inventory.Serve
 
 			var comments []*github.IssueComment
 			for _, c := range q.Repository.Discussion.Comments.Nodes {
-				comments = append(comments, &github.IssueComment{Body: github.Ptr(string(c.Body))})
+				comments = append(comments, &github.IssueComment{Body: github.Ptr(sanitize.Sanitize(string(c.Body)))})
 			}
 
 			// Create response with pagination info
@@ -583,7 +589,7 @@ func ListDiscussionCategories(t translations.TranslationHelperFunc) inventory.Se
 			for _, c := range q.Repository.DiscussionCategories.Nodes {
 				categories = append(categories, map[string]string{
 					"id":   fmt.Sprint(c.ID),
-					"name": string(c.Name),
+					"name": sanitize.Sanitize(string(c.Name)),
 				})
 			}
 
