@@ -819,3 +819,53 @@ func Test_ListDiscussionCategories(t *testing.T) {
 		})
 	}
 }
+
+func Test_DiscussionsSanitization(t *testing.T) {
+	toolDef := GetDiscussion(translations.NullTranslationHelper)
+
+	qGetDiscussion := "query($discussionNumber:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){number,title,body,createdAt,closed,isAnswered,answerChosenAt,url,category{name}}}}"
+
+	vars := map[string]interface{}{
+		"owner":            "owner",
+		"repo":             "repo",
+		"discussionNumber": float64(1),
+	}
+
+	maliciousTitle := "Test <script>alert('xss')</script>"
+	maliciousBody := "Body <img src=x onerror=alert(1)>"
+	maliciousCategory := "Category <svg onload=alert(1)>"
+
+	mockResponse := githubv4mock.DataResponse(map[string]any{
+		"repository": map[string]any{"discussion": map[string]any{
+			"number":     1,
+			"title":      maliciousTitle,
+			"body":       maliciousBody,
+			"url":        "https://github.com/owner/repo/discussions/1",
+			"createdAt":  "2025-04-25T12:00:00Z",
+			"closed":     false,
+			"isAnswered": false,
+			"category":   map[string]any{"name": maliciousCategory},
+		}},
+	})
+
+	matcher := githubv4mock.NewQueryMatcher(qGetDiscussion, vars, mockResponse)
+	httpClient := githubv4mock.NewMockedHTTPClient(matcher)
+	gqlClient := githubv4.NewClient(httpClient)
+	deps := BaseDeps{GQLClient: gqlClient}
+	handler := toolDef.Handler(deps)
+
+	reqParams := map[string]interface{}{"owner": "owner", "repo": "repo", "discussionNumber": int32(1)}
+	req := createMCPRequest(reqParams)
+	res, err := handler(ContextWithDeps(context.Background(), deps), &req)
+	require.NoError(t, err)
+	text := getTextResult(t, res).Text
+
+	var out map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(text), &out))
+
+	// Now, these should be sanitized (unsafe tags removed)
+	assert.NotContains(t, out["title"], "<script>")
+	assert.NotContains(t, out["body"], "onerror")
+	category := out["category"].(map[string]interface{})
+	assert.NotContains(t, category["name"], "<svg")
+}
