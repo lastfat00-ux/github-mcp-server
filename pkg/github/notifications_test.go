@@ -138,6 +138,16 @@ func Test_ListNotifications(t *testing.T) {
 	}
 }
 
+func Test_sanitizeNotification(t *testing.T) {
+	n := &github.Notification{
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr("Exploit <script>alert(1)</script>"),
+		},
+	}
+	sanitizeNotification(n)
+	assert.Equal(t, "Exploit ", *n.Subject.Title)
+}
+
 func Test_ManageNotificationSubscription(t *testing.T) {
 	// Verify tool definition and schema
 	serverTool := ManageNotificationSubscription(translations.NullTranslationHelper)
