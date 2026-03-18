@@ -1,0 +1,4 @@
+## 2025-05-14 - XSS via Untrusted User-Generated Content (Notifications)
+**Vulnerability:** User-contributed content (e.g., titles, bodies, comments) fetched from the GitHub API may contain malicious HTML or scripts. If an AI agent or a UI consumer renders this content without sanitization, it can lead to XSS or prompt injection vulnerabilities.
+**Learning:** In an MCP architecture, the server acts as a data provider for LLMs. Relying solely on client-side sanitization is risky because many AI interfaces may not properly handle malicious HTML embedded in tool results. Sanitization should occur at the API response layer.
+**Prevention:** Always sanitize untrusted content (titles, bodies, descriptions) fetched from external APIs using the internal `pkg/sanitize` utility before returning it to the client.
