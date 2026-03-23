@@ -553,6 +553,30 @@ func Test_GetDiscussion(t *testing.T) {
 			expectError: true,
 			errContains: "discussion not found",
 		},
+		{
+			name: "sanitizes title and body",
+			response: githubv4mock.DataResponse(map[string]any{
+				"repository": map[string]any{"discussion": map[string]any{
+					"number":     1,
+					"title":      "Test <script>alert('xss')</script>Discussion",
+					"body":       "This is a test <img src=x onerror=alert(1)>discussion",
+					"url":        "https://github.com/owner/repo/discussions/1",
+					"createdAt":  "2025-04-25T12:00:00Z",
+					"closed":     false,
+					"isAnswered": false,
+					"category":   map[string]any{"name": "General"},
+				}},
+			}),
+			expectError: false,
+			expected: map[string]interface{}{
+				"number":     float64(1),
+				"title":      "Test Discussion",
+				"body":       "This is a test <img src=\"x\">discussion",
+				"url":        "https://github.com/owner/repo/discussions/1",
+				"closed":     false,
+				"isAnswered": false,
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -622,7 +646,7 @@ func Test_GetDiscussionComments(t *testing.T) {
 			"discussion": map[string]any{
 				"comments": map[string]any{
 					"nodes": []map[string]any{
-						{"body": "This is the first comment"},
+						{"body": "This is the first <script>alert(1)</script>comment"},
 						{"body": "This is the second comment"},
 					},
 					"pageInfo": map[string]any{
