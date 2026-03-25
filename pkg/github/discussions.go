@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -96,8 +97,9 @@ type WithCategoryNoOrder struct {
 
 func fragmentToDiscussion(fragment NodeFragment) *github.Discussion {
 	return &github.Discussion{
-		Number:    github.Ptr(int(fragment.Number)),
-		Title:     github.Ptr(string(fragment.Title)),
+		Number: github.Ptr(int(fragment.Number)),
+		// Sanitize title to prevent XSS from untrusted user content
+		Title:     github.Ptr(sanitize.Sanitize(string(fragment.Title))),
 		HTMLURL:   github.Ptr(string(fragment.URL)),
 		CreatedAt: &github.Timestamp{Time: fragment.CreatedAt.Time},
 		UpdatedAt: &github.Timestamp{Time: fragment.UpdatedAt.Time},
@@ -353,9 +355,10 @@ func GetDiscussion(t translations.TranslationHelperFunc) inventory.ServerTool {
 			// so we use map[string]interface{} for the response (consistent with other functions
 			// like ListDiscussions and GetDiscussionComments).
 			response := map[string]interface{}{
-				"number":     int(d.Number),
-				"title":      string(d.Title),
-				"body":       string(d.Body),
+				"number": int(d.Number),
+				// Sanitize title and body to prevent XSS from untrusted user content
+				"title":      sanitize.Sanitize(string(d.Title)),
+				"body":       sanitize.Sanitize(string(d.Body)),
 				"url":        string(d.URL),
 				"closed":     bool(d.Closed),
 				"isAnswered": bool(d.IsAnswered),
@@ -482,7 +485,8 @@ func GetDiscussionComments(t translations.TranslationHelperFunc) inventory.Serve
 
 			var comments []*github.IssueComment
 			for _, c := range q.Repository.Discussion.Comments.Nodes {
-				comments = append(comments, &github.IssueComment{Body: github.Ptr(string(c.Body))})
+				// Sanitize comment body to prevent XSS from untrusted user content
+				comments = append(comments, &github.IssueComment{Body: github.Ptr(sanitize.Sanitize(string(c.Body)))})
 			}
 
 			// Create response with pagination info
