@@ -141,7 +141,7 @@ func Test_ListNotifications(t *testing.T) {
 func Test_sanitizeNotification(t *testing.T) {
 	n := &github.Notification{
 		Subject: &github.NotificationSubject{
-			Title: github.Ptr("Hello <script>alert('xss')</script> World"),
+			Title: github.String("Hello <script>alert('xss')</script> World"),
 		},
 	}
 	sanitizeNotification(n)

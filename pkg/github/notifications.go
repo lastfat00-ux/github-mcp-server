@@ -412,7 +412,7 @@ func sanitizeNotification(n *github.Notification) {
 		return
 	}
 	if n.Subject.Title != nil {
-		n.Subject.Title = github.Ptr(sanitize.Sanitize(*n.Subject.Title))
+		n.Subject.Title = github.String(sanitize.Sanitize(*n.Subject.Title))
 	}
 }
 
