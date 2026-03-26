@@ -138,6 +138,17 @@ func Test_ListNotifications(t *testing.T) {
 	}
 }
 
+func Test_sanitizeNotification(t *testing.T) {
+	n := &github.Notification{
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr("Hello <script>alert('xss')</script> World"),
+		},
+	}
+	sanitizeNotification(n)
+	assert.NotContains(t, *n.Subject.Title, "<script>")
+	assert.Contains(t, *n.Subject.Title, "Hello  World")
+}
+
 func Test_ManageNotificationSubscription(t *testing.T) {
 	// Verify tool definition and schema
 	serverTool := ManageNotificationSubscription(translations.NullTranslationHelper)
