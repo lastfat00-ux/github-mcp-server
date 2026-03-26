@@ -138,6 +138,34 @@ func Test_ListNotifications(t *testing.T) {
 	}
 }
 
+func TestNotifications_Sanitization(t *testing.T) {
+	// Verify sanitization in ListNotifications
+	listTool := ListNotifications(translations.NullTranslationHelper)
+	mockNotif := &github.Notification{Subject: &github.NotificationSubject{Title: github.Ptr("<script>alert(1)</script>Safe")}}
+	client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{mockNotif}),
+	}))
+	deps := BaseDeps{Client: client}
+	req := createMCPRequest(map[string]interface{}{})
+	res, _ := listTool.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+	var listRes []*github.Notification
+	_ = json.Unmarshal([]byte(getTextResult(t, res).Text), &listRes)
+	assert.Equal(t, "Safe", *listRes[0].Subject.Title)
+
+	// Verify sanitization in GetNotificationDetails
+	getTool := GetNotificationDetails(translations.NullTranslationHelper)
+	mockThread := &github.Notification{Subject: &github.NotificationSubject{Title: github.Ptr("<script>alert(2)</script>Malicious")}}
+	client = github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, mockThread),
+	}))
+	deps = BaseDeps{Client: client}
+	req = createMCPRequest(map[string]interface{}{"notificationID": "123"})
+	res, _ = getTool.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+	var getRes github.Notification
+	_ = json.Unmarshal([]byte(getTextResult(t, res).Text), &getRes)
+	assert.Equal(t, "Malicious", *getRes.Subject.Title)
+}
+
 func Test_ManageNotificationSubscription(t *testing.T) {
 	// Verify tool definition and schema
 	serverTool := ManageNotificationSubscription(translations.NullTranslationHelper)
