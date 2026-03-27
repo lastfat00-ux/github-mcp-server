@@ -37,9 +37,6 @@ func Test_ListNotifications(t *testing.T) {
 	mockNotification := &github.Notification{
 		ID:     github.Ptr("123"),
 		Reason: github.Ptr("mention"),
-		Subject: &github.NotificationSubject{
-			Title: github.Ptr("Safe Title"),
-		},
 	}
 
 	tests := []struct {
@@ -58,30 +55,6 @@ func Test_ListNotifications(t *testing.T) {
 			requestArgs:    map[string]interface{}{},
 			expectError:    false,
 			expectedResult: []*github.Notification{mockNotification},
-		},
-		{
-			name: "success with unsanitized subject title",
-			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-				GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{
-					{
-						ID:     github.Ptr("124"),
-						Reason: github.Ptr("mention"),
-						Subject: &github.NotificationSubject{
-							Title: github.Ptr("<script>alert('xss')</script>Unsafe Title"),
-						},
-					},
-				}),
-			}),
-			requestArgs: map[string]interface{}{},
-			expectError: false,
-			expectedResult: []*github.Notification{
-				{
-					ID: github.Ptr("124"),
-					Subject: &github.NotificationSubject{
-						Title: github.Ptr("Unsafe Title"),
-					},
-				},
-			},
 		},
 		{
 			name: "success with filter=include_read_notifications",
@@ -161,10 +134,6 @@ func Test_ListNotifications(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, returned)
 			assert.Equal(t, *tc.expectedResult[0].ID, *returned[0].ID)
-			if tc.expectedResult[0].Subject != nil && tc.expectedResult[0].Subject.Title != nil {
-				require.NotNil(t, returned[0].Subject)
-				assert.Equal(t, *tc.expectedResult[0].Subject.Title, *returned[0].Subject.Title)
-			}
 		})
 	}
 }
@@ -708,13 +677,7 @@ func Test_GetNotificationDetails(t *testing.T) {
 	assert.Contains(t, schema.Properties, "notificationID")
 	assert.Equal(t, []string{"notificationID"}, schema.Required)
 
-	mockThread := &github.Notification{
-		ID:     github.Ptr("123"),
-		Reason: github.Ptr("mention"),
-		Subject: &github.NotificationSubject{
-			Title: github.Ptr("Safe Title"),
-		},
-	}
+	mockThread := &github.Notification{ID: github.Ptr("123"), Reason: github.Ptr("mention")}
 
 	tests := []struct {
 		name           string
@@ -734,28 +697,6 @@ func Test_GetNotificationDetails(t *testing.T) {
 			},
 			expectError:  false,
 			expectResult: mockThread,
-		},
-		{
-			name: "success with unsanitized subject title",
-			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-				GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, &github.Notification{
-					ID:     github.Ptr("124"),
-					Reason: github.Ptr("mention"),
-					Subject: &github.NotificationSubject{
-						Title: github.Ptr("<script>alert('xss')</script>Unsafe Title"),
-					},
-				}),
-			}),
-			requestArgs: map[string]interface{}{
-				"notificationID": "124",
-			},
-			expectError: false,
-			expectResult: &github.Notification{
-				ID: github.Ptr("124"),
-				Subject: &github.NotificationSubject{
-					Title: github.Ptr("Unsafe Title"),
-				},
-			},
 		},
 		{
 			name: "not found",
@@ -797,10 +738,6 @@ func Test_GetNotificationDetails(t *testing.T) {
 			err = json.Unmarshal([]byte(textContent.Text), &returned)
 			require.NoError(t, err)
 			assert.Equal(t, *tc.expectResult.ID, *returned.ID)
-			if tc.expectResult.Subject != nil && tc.expectResult.Subject.Title != nil {
-				require.NotNil(t, returned.Subject)
-				assert.Equal(t, *tc.expectResult.Subject.Title, *returned.Subject.Title)
-			}
 		})
 	}
 }
