@@ -9,6 +9,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -108,6 +109,13 @@ func SearchRepositories(t translations.TranslationHelperFunc) inventory.ServerTo
 					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, nil
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to search repositories", resp, body), nil, nil
+			}
+
+			// Sanitize repository descriptions to prevent XSS from untrusted user content
+			for _, repo := range result.Repositories {
+				if repo != nil && repo.Description != nil {
+					repo.Description = github.Ptr(sanitize.Sanitize(*repo.Description))
+				}
 			}
 
 			// Return either minimal or full response based on parameter

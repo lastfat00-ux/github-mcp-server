@@ -105,6 +105,47 @@ func Test_SearchRepositories(t *testing.T) {
 			expectedResult: mockSearchResult,
 		},
 		{
+			name: "repository search results are sanitized",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetSearchRepositories: expectQueryParams(t, map[string]string{
+					"q":        "xss test",
+					"page":     "1",
+					"per_page": "30",
+				}).andThen(
+					mockResponse(t, http.StatusOK, &github.RepositoriesSearchResult{
+						Total:             github.Ptr(1),
+						IncompleteResults: github.Ptr(false),
+						Repositories: []*github.Repository{
+							{
+								ID:          github.Ptr(int64(999)),
+								Name:        github.Ptr("xss-repo"),
+								FullName:    github.Ptr("owner/xss-repo"),
+								HTMLURL:     github.Ptr("https://github.com/owner/xss-repo"),
+								Description: github.Ptr("Repo with <script>alert('xss')</script> description"),
+							},
+						},
+					}),
+				),
+			}),
+			requestArgs: map[string]interface{}{
+				"query": "xss test",
+			},
+			expectError: false,
+			expectedResult: &github.RepositoriesSearchResult{
+				Total:             github.Ptr(1),
+				IncompleteResults: github.Ptr(false),
+				Repositories: []*github.Repository{
+					{
+						ID:          github.Ptr(int64(999)),
+						Name:        github.Ptr("xss-repo"),
+						FullName:    github.Ptr("owner/xss-repo"),
+						HTMLURL:     github.Ptr("https://github.com/owner/xss-repo"),
+						Description: github.Ptr("Repo with  description"),
+					},
+				},
+			},
+		},
+		{
 			name: "search fails",
 			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
 				GetSearchRepositories: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
