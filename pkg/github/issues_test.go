@@ -726,6 +726,47 @@ func Test_SearchIssues(t *testing.T) {
 			expectError:    true,
 			expectedErrMsg: "failed to search issues",
 		},
+		{
+			name: "search results are sanitized",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetSearchIssues: mockResponse(t, http.StatusOK, &github.IssuesSearchResult{
+					Total:             github.Ptr(1),
+					IncompleteResults: github.Ptr(false),
+					Issues: []*github.Issue{
+						{
+							Number:  github.Ptr(1),
+							Title:   github.Ptr("<script>alert('xss')</script>Unsafe Title"),
+							Body:    github.Ptr("<b>Safe</b> <iframe src='javascript:alert(1)'></iframe>Unsafe Body"),
+							State:   github.Ptr("open"),
+							HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
+							User: &github.User{
+								Login: github.Ptr("user1"),
+							},
+						},
+					},
+				}),
+			}),
+			requestArgs: map[string]interface{}{
+				"query": "xss",
+			},
+			expectError: false,
+			expectedResult: &github.IssuesSearchResult{
+				Total:             github.Ptr(1),
+				IncompleteResults: github.Ptr(false),
+				Issues: []*github.Issue{
+					{
+						Number:  github.Ptr(1),
+						Title:   github.Ptr("Unsafe Title"),
+						Body:    github.Ptr("<b>Safe</b>  Unsafe Body"),
+						State:   github.Ptr("open"),
+						HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
+						User: &github.User{
+							Login: github.Ptr("user1"),
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
