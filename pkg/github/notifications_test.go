@@ -104,6 +104,20 @@ func Test_ListNotifications(t *testing.T) {
 			expectError:    true,
 			expectedErrMsg: "error",
 		},
+		{
+			name: "sanitization",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{{
+					ID: github.Ptr("xss"),
+					Subject: &github.NotificationSubject{Title: github.Ptr("<b>bold</b> <script>alert(1)</script>")},
+				}}),
+			}),
+			requestArgs: map[string]interface{}{},
+			expectedResult: []*github.Notification{{
+				ID: github.Ptr("xss"),
+				Subject: &github.NotificationSubject{Title: github.Ptr("<b>bold</b> ")},
+			}},
+		},
 	}
 
 	for _, tc := range tests {
@@ -134,6 +148,9 @@ func Test_ListNotifications(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, returned)
 			assert.Equal(t, *tc.expectedResult[0].ID, *returned[0].ID)
+			if tc.expectedResult[0].Subject != nil && tc.expectedResult[0].Subject.Title != nil {
+				assert.Equal(t, *tc.expectedResult[0].Subject.Title, *returned[0].Subject.Title)
+			}
 		})
 	}
 }
