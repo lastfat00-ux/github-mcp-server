@@ -212,6 +212,14 @@ var (
 	mockErrorRepoNotFound = githubv4mock.ErrorResponse("repository not found")
 )
 
+func Test_Discussions_Sanitization(t *testing.T) {
+	t.Run("fragmentToDiscussion", func(t *testing.T) {
+		f := NodeFragment{Title: "Malicious <script>alert(1)</script>"}
+		d := fragmentToDiscussion(f)
+		assert.NotContains(t, *d.Title, "<script>")
+	})
+}
+
 func Test_ListDiscussions(t *testing.T) {
 	toolDef := ListDiscussions(translations.NullTranslationHelper)
 	tool := toolDef.Tool
