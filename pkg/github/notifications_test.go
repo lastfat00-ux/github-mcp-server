@@ -138,6 +138,31 @@ func Test_ListNotifications(t *testing.T) {
 	}
 }
 
+func Test_Notifications_XSS(t *testing.T) {
+	mock := &github.Notification{ID: github.Ptr("123"), Subject: &github.NotificationSubject{Title: github.Ptr("Exploit <script>alert('xss')</script>")}}
+	deps := BaseDeps{Client: github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{mock}), GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, mock),
+	}))}
+	ctx := ContextWithDeps(context.Background(), deps)
+
+	t.Run("list_notifications", func(t *testing.T) {
+		tool := ListNotifications(translations.NullTranslationHelper)
+		req := createMCPRequest(map[string]any{})
+		res, _ := tool.Handler(deps)(ctx, &req)
+		var ret []*github.Notification
+		_ = json.Unmarshal([]byte(getTextResult(t, res).Text), &ret)
+		assert.Equal(t, "Exploit ", *ret[0].Subject.Title)
+	})
+	t.Run("get_details", func(t *testing.T) {
+		tool := GetNotificationDetails(translations.NullTranslationHelper)
+		req := createMCPRequest(map[string]any{"notificationID": "123"})
+		res, _ := tool.Handler(deps)(ctx, &req)
+		var ret github.Notification
+		_ = json.Unmarshal([]byte(getTextResult(t, res).Text), &ret)
+		assert.Equal(t, "Exploit ", *ret.Subject.Title)
+	})
+}
+
 func Test_ManageNotificationSubscription(t *testing.T) {
 	// Verify tool definition and schema
 	serverTool := ManageNotificationSubscription(translations.NullTranslationHelper)
