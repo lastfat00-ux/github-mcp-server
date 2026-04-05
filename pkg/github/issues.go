@@ -424,6 +424,13 @@ func GetIssueComments(ctx context.Context, client *github.Client, cache *lockdow
 		comments = filteredComments
 	}
 
+	// Sanitize comment bodies to prevent XSS from untrusted user content
+	for _, comment := range comments {
+		if comment != nil && comment.Body != nil {
+			comment.Body = github.Ptr(sanitize.Sanitize(*comment.Body))
+		}
+	}
+
 	r, err := json.Marshal(comments)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -482,6 +489,18 @@ func GetSubIssues(ctx context.Context, client *github.Client, cache *lockdown.Re
 			}
 		}
 		subIssues = filteredSubIssues
+	}
+
+	// Sanitize sub-issue titles and bodies to prevent XSS from untrusted user content
+	for _, subIssue := range subIssues {
+		if subIssue != nil {
+			if subIssue.Title != nil {
+				subIssue.Title = github.Ptr(sanitize.Sanitize(*subIssue.Title))
+			}
+			if subIssue.Body != nil {
+				subIssue.Body = github.Ptr(sanitize.Sanitize(*subIssue.Body))
+			}
+		}
 	}
 
 	r, err := json.Marshal(subIssues)
@@ -1594,7 +1613,7 @@ func (d *mvpDescription) String() string {
 		sb.WriteString("\n\n")
 		sb.WriteString("This tool can help with the following outcomes:\n")
 		for _, outcome := range d.outcomes {
-			sb.WriteString(fmt.Sprintf("- %s\n", outcome))
+			fmt.Fprintf(&sb, "- %s\n", outcome)
 		}
 	}
 
@@ -1602,7 +1621,7 @@ func (d *mvpDescription) String() string {
 		sb.WriteString("\n\n")
 		sb.WriteString("More information can be found at:\n")
 		for _, link := range d.referenceLinks {
-			sb.WriteString(fmt.Sprintf("- %s\n", link))
+			fmt.Fprintf(&sb, "- %s\n", link)
 		}
 	}
 
