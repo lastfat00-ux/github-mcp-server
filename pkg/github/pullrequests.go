@@ -401,6 +401,15 @@ func GetPullRequestReviewComments(ctx context.Context, gqlClient *githubv4.Clien
 		}
 	}
 
+	// Sanitize review comment bodies to prevent XSS from untrusted user content
+	for i := range query.Repository.PullRequest.ReviewThreads.Nodes {
+		thread := &query.Repository.PullRequest.ReviewThreads.Nodes[i]
+		for j := range thread.Comments.Nodes {
+			comment := &thread.Comments.Nodes[j]
+			comment.Body = githubv4.String(sanitize.Sanitize(string(comment.Body)))
+		}
+	}
+
 	// Build response with review threads and pagination info
 	response := map[string]any{
 		"reviewThreads": query.Repository.PullRequest.ReviewThreads.Nodes,
@@ -455,8 +464,15 @@ func GetPullRequestReviews(ctx context.Context, client *github.Client, cache *lo
 				if isSafeContent {
 					filteredReviews = append(filteredReviews, review)
 				}
-				reviews = filteredReviews
 			}
+		}
+		reviews = filteredReviews
+	}
+
+	// Sanitize review bodies to prevent XSS from untrusted user content
+	for _, review := range reviews {
+		if review != nil && review.Body != nil {
+			review.Body = github.Ptr(sanitize.Sanitize(*review.Body))
 		}
 	}
 
