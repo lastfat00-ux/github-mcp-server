@@ -1,6 +1,7 @@
 package github
 
 import (
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/google/go-github/v79/github"
 )
 
@@ -180,7 +181,8 @@ func convertToMinimalCommit(commit *github.RepositoryCommit, includeDiffs bool) 
 
 	if commit.Commit != nil {
 		minimalCommit.Commit = &MinimalCommitInfo{
-			Message: commit.Commit.GetMessage(),
+			// Sanitize commit message to prevent XSS from untrusted user content
+			Message: sanitize.Sanitize(commit.Commit.GetMessage()),
 		}
 
 		if commit.Commit.Author != nil {

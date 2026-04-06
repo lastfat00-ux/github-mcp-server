@@ -1784,6 +1784,72 @@ func Test_GetPullRequestComments(t *testing.T) {
 				assert.Equal(t, "Maintainer review comment", comment["Body"])
 			},
 		},
+		{
+			name: "pull request review comments are sanitized for XSS",
+			gqlHTTPClient: githubv4mock.NewMockedHTTPClient(
+				githubv4mock.NewQueryMatcher(
+					reviewThreadsQuery{},
+					map[string]interface{}{
+						"owner":             githubv4.String("owner"),
+						"repo":              githubv4.String("repo"),
+						"prNum":             githubv4.Int(42),
+						"first":             githubv4.Int(30),
+						"commentsPerThread": githubv4.Int(100),
+						"after":             (*githubv4.String)(nil),
+					},
+					githubv4mock.DataResponse(map[string]any{
+						"repository": map[string]any{
+							"pullRequest": map[string]any{
+								"reviewThreads": map[string]any{
+									"nodes": []map[string]any{
+										{
+											"id": "RT1",
+											"comments": map[string]any{
+												"nodes": []map[string]any{
+													{
+														"id":   "C1",
+														"body": "<script>alert('xss')</script>Safe Comment",
+														"author": map[string]any{
+															"login": "user1",
+														},
+														"url": "https://github.com/owner/repo/pull/42",
+													},
+												},
+											},
+										},
+									},
+									"pageInfo": map[string]any{
+										"hasNextPage":     false,
+										"hasPreviousPage": false,
+										"startCursor":     "",
+										"endCursor":       "",
+									},
+									"totalCount": 1,
+								},
+							},
+						},
+					}),
+				),
+			),
+			requestArgs: map[string]interface{}{
+				"method":     "get_review_comments",
+				"owner":      "owner",
+				"repo":       "repo",
+				"pullNumber": float64(42),
+			},
+			expectError: false,
+			validateResult: func(t *testing.T, textContent string) {
+				var result map[string]interface{}
+				err := json.Unmarshal([]byte(textContent), &result)
+				require.NoError(t, err)
+				threads := result["reviewThreads"].([]interface{})
+				thread := threads[0].(map[string]interface{})
+				comments := thread["Comments"].(map[string]interface{})
+				commentNodes := comments["Nodes"].([]interface{})
+				comment := commentNodes[0].(map[string]interface{})
+				assert.Equal(t, "Safe Comment", comment["Body"])
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -1960,6 +2026,32 @@ func Test_GetPullRequestReviews(t *testing.T) {
 				},
 			},
 			lockdownEnabled: true,
+		},
+		{
+			name: "pull request reviews are sanitized for XSS",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetReposPullsReviewsByOwnerByRepoByPullNumber: mockResponse(t, http.StatusOK, []*github.PullRequestReview{
+					{
+						ID:   github.Ptr(int64(1)),
+						Body: github.Ptr("<script>alert('xss')</script>Safe Review"),
+						User: &github.User{Login: github.Ptr("user1")},
+					},
+				}),
+			}),
+			requestArgs: map[string]interface{}{
+				"method":     "get_reviews",
+				"owner":      "owner",
+				"repo":       "repo",
+				"pullNumber": float64(42),
+			},
+			expectError: false,
+			expectedReviews: []*github.PullRequestReview{
+				{
+					ID:   github.Ptr(int64(1)),
+					Body: github.Ptr("Safe Review"),
+					User: &github.User{Login: github.Ptr("user1")},
+				},
+			},
 		},
 	}
 
