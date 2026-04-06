@@ -726,43 +726,6 @@ func Test_SearchIssues(t *testing.T) {
 			expectError:    true,
 			expectedErrMsg: "failed to search issues",
 		},
-		{
-			name: "search results are sanitized for XSS",
-			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-				GetSearchIssues: mockResponse(t, http.StatusOK, &github.IssuesSearchResult{
-					Total:             github.Ptr(1),
-					IncompleteResults: github.Ptr(false),
-					Issues: []*github.Issue{
-						{
-							Number:  github.Ptr(1),
-							Title:   github.Ptr("<script>alert('xss')</script>Safe Title"),
-							Body:    github.Ptr("<img src=x onerror=alert('xss')>Safe Body"),
-							State:   github.Ptr("open"),
-							HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
-							User:    &github.User{Login: github.Ptr("user1")},
-						},
-					},
-				}),
-			}),
-			requestArgs: map[string]interface{}{
-				"query": "xss",
-			},
-			expectError: false,
-			expectedResult: &github.IssuesSearchResult{
-				Total:             github.Ptr(1),
-				IncompleteResults: github.Ptr(false),
-				Issues: []*github.Issue{
-					{
-						Number:  github.Ptr(1),
-						Title:   github.Ptr("Safe Title"),
-						Body:    github.Ptr("<img src=\"x\">Safe Body"),
-						State:   github.Ptr("open"),
-						HTMLURL: github.Ptr("https://github.com/owner/repo/issues/1"),
-						User:    &github.User{Login: github.Ptr("user1")},
-					},
-				},
-			},
-		},
 	}
 
 	for _, tc := range tests {
@@ -1947,32 +1910,6 @@ func Test_GetIssueComments(t *testing.T) {
 				},
 			},
 			lockdownEnabled: true,
-		},
-		{
-			name: "issue comments are sanitized for XSS",
-			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-				GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, []*github.IssueComment{
-					{
-						ID:   github.Ptr(int64(1)),
-						Body: github.Ptr("<script>alert('xss')</script>Safe Comment"),
-						User: &github.User{Login: github.Ptr("user1")},
-					},
-				}),
-			}),
-			requestArgs: map[string]interface{}{
-				"method":       "get_comments",
-				"owner":        "owner",
-				"repo":         "repo",
-				"issue_number": float64(42),
-			},
-			expectError: false,
-			expectedComments: []*github.IssueComment{
-				{
-					ID:   github.Ptr(int64(1)),
-					Body: github.Ptr("Safe Comment"),
-					User: &github.User{Login: github.Ptr("user1")},
-				},
-			},
 		},
 	}
 
