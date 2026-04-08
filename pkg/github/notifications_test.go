@@ -96,6 +96,30 @@ func Test_ListNotifications(t *testing.T) {
 			expectedResult: []*github.Notification{mockNotification},
 		},
 		{
+			name: "success with sanitization",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{
+					{
+						ID:     github.Ptr("124"),
+						Reason: github.Ptr("mention"),
+						Subject: &github.NotificationSubject{
+							Title: github.Ptr("Malicious <script>alert('xss')</script> Title"),
+						},
+					},
+				}),
+			}),
+			requestArgs: map[string]interface{}{},
+			expectError: false,
+			expectedResult: []*github.Notification{
+				{
+					ID: github.Ptr("124"),
+					Subject: &github.NotificationSubject{
+						Title: github.Ptr("Malicious  Title"),
+					},
+				},
+			},
+		},
+		{
 			name: "error",
 			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
 				GetNotifications: mockResponse(t, http.StatusInternalServerError, `{"message": "error"}`),
@@ -134,6 +158,9 @@ func Test_ListNotifications(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, returned)
 			assert.Equal(t, *tc.expectedResult[0].ID, *returned[0].ID)
+			if tc.expectedResult[0].Subject != nil && tc.expectedResult[0].Subject.Title != nil {
+				assert.Equal(t, *tc.expectedResult[0].Subject.Title, *returned[0].Subject.Title)
+			}
 		})
 	}
 }
@@ -709,6 +736,27 @@ func Test_GetNotificationDetails(t *testing.T) {
 			expectError:    true,
 			expectedErrMsg: "not found",
 		},
+		{
+			name: "success with sanitization",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, &github.Notification{
+					ID: github.Ptr("123"),
+					Subject: &github.NotificationSubject{
+						Title: github.Ptr("Malicious <script>alert('xss')</script> Title"),
+					},
+				}),
+			}),
+			requestArgs: map[string]interface{}{
+				"notificationID": "123",
+			},
+			expectError: false,
+			expectResult: &github.Notification{
+				ID: github.Ptr("123"),
+				Subject: &github.NotificationSubject{
+					Title: github.Ptr("Malicious  Title"),
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -738,6 +786,9 @@ func Test_GetNotificationDetails(t *testing.T) {
 			err = json.Unmarshal([]byte(textContent.Text), &returned)
 			require.NoError(t, err)
 			assert.Equal(t, *tc.expectResult.ID, *returned.ID)
+			if tc.expectResult.Subject != nil && tc.expectResult.Subject.Title != nil {
+				assert.Equal(t, *tc.expectResult.Subject.Title, *returned.Subject.Title)
+			}
 		})
 	}
 }
