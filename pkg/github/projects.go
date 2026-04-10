@@ -10,6 +10,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -346,6 +347,10 @@ func ListProjectFields(t translations.TranslationHelperFunc) inventory.ServerToo
 			}
 			defer func() { _ = resp.Body.Close() }()
 
+			for _, f := range projectFields {
+				f.Name = github.Ptr(sanitize.Sanitize(f.GetName()))
+			}
+
 			response := map[string]any{
 				"fields":   projectFields,
 				"pageInfo": buildPageInfo(resp),
@@ -446,6 +451,9 @@ func GetProjectField(t translations.TranslationHelperFunc) inventory.ServerTool 
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get project field", resp, body), nil, nil
 			}
+
+			projectField.Name = github.Ptr(sanitize.Sanitize(projectField.GetName()))
+
 			r, err := json.Marshal(projectField)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -1453,6 +1461,10 @@ func listProjectFields(ctx context.Context, client *github.Client, args map[stri
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	for _, f := range projectFields {
+		f.Name = github.Ptr(sanitize.Sanitize(f.GetName()))
+	}
+
 	response := map[string]any{
 		"fields":   projectFields,
 		"pageInfo": buildPageInfo(resp),
@@ -1594,6 +1606,9 @@ func getProjectField(ctx context.Context, client *github.Client, owner, ownerTyp
 		}
 		return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get project field", resp, body), nil, nil
 	}
+
+	projectField.Name = github.Ptr(sanitize.Sanitize(projectField.GetName()))
+
 	r, err := json.Marshal(projectField)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
