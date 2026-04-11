@@ -479,6 +479,7 @@ func ListOrgRepositorySecurityAdvisories(t translations.TranslationHelperFunc) i
 	)
 }
 
+// sanitizeSecurityAdvisory sanitizes the Summary and Description fields of a SecurityAdvisory.
 func sanitizeSecurityAdvisory(adv *github.SecurityAdvisory) {
 	if adv == nil {
 		return
@@ -491,6 +492,7 @@ func sanitizeSecurityAdvisory(adv *github.SecurityAdvisory) {
 	}
 }
 
+// sanitizeGlobalSecurityAdvisory sanitizes the Summary and Description fields within a GlobalSecurityAdvisory.
 func sanitizeGlobalSecurityAdvisory(adv *github.GlobalSecurityAdvisory) {
 	if adv == nil {
 		return

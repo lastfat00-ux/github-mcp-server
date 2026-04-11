@@ -131,7 +131,6 @@ func Test_ListGlobalSecurityAdvisories(t *testing.T) {
 
 func Test_ListGlobalSecurityAdvisories_Sanitization(t *testing.T) {
 	toolDef := ListGlobalSecurityAdvisories(translations.NullTranslationHelper)
-
 	mockAdvisory := &github.GlobalSecurityAdvisory{
 		SecurityAdvisory: github.SecurityAdvisory{
 			GHSAID:      github.Ptr("GHSA-xss-test"),
@@ -140,24 +139,19 @@ func Test_ListGlobalSecurityAdvisories_Sanitization(t *testing.T) {
 			Severity:    github.Ptr("high"),
 		},
 	}
-
 	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
 		GetAdvisories: mockResponse(t, http.StatusOK, []*github.GlobalSecurityAdvisory{mockAdvisory}),
 	})
-
 	client := github.NewClient(mockedClient)
 	deps := BaseDeps{Client: client}
 	handler := toolDef.Handler(deps)
-
 	request := createMCPRequest(map[string]interface{}{})
 	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
 	require.NoError(t, err)
-
 	textContent := getTextResult(t, result)
 	var returnedAdvisories []*github.GlobalSecurityAdvisory
 	err = json.Unmarshal([]byte(textContent.Text), &returnedAdvisories)
 	assert.NoError(t, err)
-
 	assert.Equal(t, "Alert ", *returnedAdvisories[0].Summary)
 	assert.Equal(t, "Vulnerability description with ", *returnedAdvisories[0].Description)
 }
