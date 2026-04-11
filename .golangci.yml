@@ -37,4 +37,4 @@ issues:
         - govet
         - ineffassign
         - unused
-  exclude-generated: true
+  exclude-generated: lax
