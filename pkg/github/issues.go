@@ -484,6 +484,18 @@ func GetSubIssues(ctx context.Context, client *github.Client, cache *lockdown.Re
 		subIssues = filteredSubIssues
 	}
 
+	// Sanitize sub-issue titles and bodies to prevent XSS
+	for _, subIssue := range subIssues {
+		if subIssue != nil {
+			if subIssue.Title != nil {
+				subIssue.Title = github.Ptr(sanitize.Sanitize(*subIssue.Title))
+			}
+			if subIssue.Body != nil {
+				subIssue.Body = github.Ptr(sanitize.Sanitize(*subIssue.Body))
+			}
+		}
+	}
+
 	r, err := json.Marshal(subIssues)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -525,9 +537,9 @@ func GetIssueLabels(ctx context.Context, client *githubv4.Client, owner string, 
 	for i, label := range query.Repository.Issue.Labels.Nodes {
 		issueLabels[i] = map[string]any{
 			"id":          fmt.Sprintf("%v", label.ID),
-			"name":        string(label.Name),
+			"name":        sanitize.Sanitize(string(label.Name)),
 			"color":       string(label.Color),
-			"description": string(label.Description),
+			"description": sanitize.Sanitize(string(label.Description)),
 		}
 	}
 
@@ -824,6 +836,16 @@ func AddSubIssue(ctx context.Context, client *github.Client, owner string, repo 
 		return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to add sub-issue", resp, body), nil
 	}
 
+	// Sanitize sub-issue title and body to prevent XSS
+	if subIssue != nil {
+		if subIssue.Title != nil {
+			subIssue.Title = github.Ptr(sanitize.Sanitize(*subIssue.Title))
+		}
+		if subIssue.Body != nil {
+			subIssue.Body = github.Ptr(sanitize.Sanitize(*subIssue.Body))
+		}
+	}
+
 	r, err := json.Marshal(subIssue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -854,6 +876,16 @@ func RemoveSubIssue(ctx context.Context, client *github.Client, owner string, re
 			return nil, fmt.Errorf("failed to read response body: %w", err)
 		}
 		return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to remove sub-issue", resp, body), nil
+	}
+
+	// Sanitize sub-issue title and body to prevent XSS
+	if subIssue != nil {
+		if subIssue.Title != nil {
+			subIssue.Title = github.Ptr(sanitize.Sanitize(*subIssue.Title))
+		}
+		if subIssue.Body != nil {
+			subIssue.Body = github.Ptr(sanitize.Sanitize(*subIssue.Body))
+		}
 	}
 
 	r, err := json.Marshal(subIssue)
@@ -903,6 +935,16 @@ func ReprioritizeSubIssue(ctx context.Context, client *github.Client, owner stri
 			return nil, fmt.Errorf("failed to read response body: %w", err)
 		}
 		return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to reprioritize sub-issue", resp, body), nil
+	}
+
+	// Sanitize sub-issue title and body to prevent XSS
+	if subIssue != nil {
+		if subIssue.Title != nil {
+			subIssue.Title = github.Ptr(sanitize.Sanitize(*subIssue.Title))
+		}
+		if subIssue.Body != nil {
+			subIssue.Body = github.Ptr(sanitize.Sanitize(*subIssue.Body))
+		}
 	}
 
 	r, err := json.Marshal(subIssue)
