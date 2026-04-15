@@ -396,11 +396,6 @@ func GetNotificationDetails(t translations.TranslationHelperFunc) inventory.Serv
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get notification details", resp, body), nil, nil
 			}
 
-			// Sanitize notification title to prevent XSS from untrusted user content
-			if thread != nil && thread.Subject != nil && thread.Subject.Title != nil {
-				thread.Subject.Title = github.Ptr(sanitize.Sanitize(*thread.Subject.Title))
-			}
-
 			r, err := json.Marshal(thread)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal response", err), nil, nil
