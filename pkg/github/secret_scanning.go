@@ -84,7 +84,7 @@ func GetSecretScanningAlert(t translations.TranslationHelperFunc) inventory.Serv
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get alert", resp, body), nil, nil
 			}
 
-			r, err := json.Marshal(alert)
+			r, err := json.Marshal(alert) // nolint:gosec // JSON marshaling of a field named 'Secret' is intentional as this tool specifically provides details about secret scanning alerts.
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal alert: %w", err)
 			}
@@ -178,7 +178,7 @@ func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.Se
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list alerts", resp, body), nil, nil
 			}
 
-			r, err := json.Marshal(alerts)
+			r, err := json.Marshal(alerts) // nolint:gosec // JSON marshaling of a field named 'Secret' is intentional as this tool specifically provides details about secret scanning alerts.
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal alerts: %w", err)
 			}
