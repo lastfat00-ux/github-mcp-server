@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/github/github-mcp-server/internal/toolsnaps"
+	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/google/go-github/v79/github"
 	"github.com/google/jsonschema-go/jsonschema"
@@ -738,6 +739,57 @@ func Test_GetNotificationDetails(t *testing.T) {
 			err = json.Unmarshal([]byte(textContent.Text), &returned)
 			require.NoError(t, err)
 			assert.Equal(t, *tc.expectResult.ID, *returned.ID)
+		})
+	}
+}
+
+
+func Test_Notifications_Sanitization(t *testing.T) {
+	mockNotification := &github.Notification{
+		ID: github.Ptr("123"),
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr("<script>alert('xss')</script> Safe Title script.js"),
+		},
+	}
+
+	tests := []struct {
+		name     string
+		toolFunc func(translations.TranslationHelperFunc) inventory.ServerTool
+		args     map[string]interface{}
+		endpoint string
+		response any
+	}{
+		{
+			name:     "ListNotifications sanitizes title",
+			toolFunc: ListNotifications,
+			args:     map[string]interface{}{},
+			endpoint: GetNotifications,
+			response: []*github.Notification{mockNotification},
+		},
+		{
+			name:     "GetNotificationDetails sanitizes title",
+			toolFunc: GetNotificationDetails,
+			args:     map[string]interface{}{"notificationID": "123"},
+			endpoint: GetNotificationsThreadsByThreadID,
+			response: mockNotification,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				tc.endpoint: mockResponse(t, http.StatusOK, tc.response),
+			}))
+			deps := BaseDeps{Client: client}
+			req := createMCPRequest(tc.args)
+			tool := tc.toolFunc(translations.NullTranslationHelper)
+			result, err := tool.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+
+			require.NoError(t, err)
+			textContent := getTextResult(t, result).Text
+			assert.NotContains(t, textContent, "<script>")
+			assert.Contains(t, textContent, "Safe Title")
+			assert.Contains(t, textContent, "script.js")
 		})
 	}
 }
