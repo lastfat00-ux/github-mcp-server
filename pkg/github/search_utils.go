@@ -112,6 +112,9 @@ func searchHandler(
 	// Sanitize results to prevent XSS
 	if result != nil {
 		for _, issue := range result.Issues {
+			if issue == nil {
+				continue
+			}
 			if issue.Title != nil {
 				issue.Title = github.Ptr(sanitize.Sanitize(*issue.Title))
 			}
@@ -119,6 +122,9 @@ func searchHandler(
 				issue.Body = github.Ptr(sanitize.Sanitize(*issue.Body))
 			}
 			for _, label := range issue.Labels {
+				if label == nil {
+					continue
+				}
 				if label.Name != nil {
 					label.Name = github.Ptr(sanitize.Sanitize(*label.Name))
 				}
