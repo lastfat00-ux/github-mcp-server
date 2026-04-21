@@ -9,7 +9,6 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
-	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -109,19 +108,6 @@ func SearchRepositories(t translations.TranslationHelperFunc) inventory.ServerTo
 					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, nil
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to search repositories", resp, body), nil, nil
-			}
-
-			// Sanitize descriptions and names to prevent XSS
-			for _, repo := range result.Repositories {
-				if repo == nil {
-					continue
-				}
-				if repo.Description != nil {
-					repo.Description = github.Ptr(sanitize.Sanitize(*repo.Description))
-				}
-				if repo.Name != nil {
-					repo.Name = github.Ptr(sanitize.Sanitize(*repo.Name))
-				}
 			}
 
 			// Return either minimal or full response based on parameter
@@ -265,24 +251,6 @@ func SearchCode(t translations.TranslationHelperFunc) inventory.ServerTool {
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to search code", resp, body), nil, nil
 			}
 
-			// Sanitize results to prevent XSS
-			for _, code := range result.CodeResults {
-				if code == nil {
-					continue
-				}
-				if code.Name != nil {
-					code.Name = github.Ptr(sanitize.Sanitize(*code.Name))
-				}
-				if code.Repository != nil {
-					if code.Repository.Description != nil {
-						code.Repository.Description = github.Ptr(sanitize.Sanitize(*code.Repository.Description))
-					}
-					if code.Repository.Name != nil {
-						code.Repository.Name = github.Ptr(sanitize.Sanitize(*code.Repository.Name))
-					}
-				}
-			}
-
 			r, err := json.Marshal(result)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal response", err), nil, nil
@@ -345,16 +313,6 @@ func userOrOrgHandler(ctx context.Context, accountType string, deps ToolDependen
 			return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, nil
 		}
 		return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, fmt.Sprintf("failed to search %ss", accountType), resp, body), nil, nil
-	}
-
-	// Sanitize login names to prevent XSS
-	for _, user := range result.Users {
-		if user == nil {
-			continue
-		}
-		if user.Login != nil {
-			user.Login = github.Ptr(sanitize.Sanitize(*user.Login))
-		}
 	}
 
 	minimalUsers := make([]MinimalUser, 0, len(result.Users))

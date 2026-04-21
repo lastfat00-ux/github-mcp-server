@@ -145,7 +145,7 @@ func Test_searchHandler_Sanitization(t *testing.T) {
 		"query": "some query",
 	}
 
-	result, err := searchHandler(context.Background(), func(ctx context.Context) (*github.Client, error) {
+	result, err := searchHandler(context.Background(), func(_ context.Context) (*github.Client, error) {
 		return client, nil
 	}, args, "issue", "failed to search issues")
 
