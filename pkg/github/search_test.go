@@ -168,6 +168,43 @@ func Test_SearchRepositories(t *testing.T) {
 	}
 }
 
+func Test_SearchCode_Sanitization(t *testing.T) {
+	mockSearchResult := &github.CodeSearchResult{
+		Total: github.Ptr(1),
+		CodeResults: []*github.CodeResult{
+			{
+				Name: github.Ptr("evil.go <script>alert(1)</script>"),
+				Repository: &github.Repository{
+					Name:        github.Ptr("test-repo <script>alert(1)</script>"),
+					Description: github.Ptr("Test repository <img src=x onerror=alert(1)>"),
+				},
+			},
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetSearchCode: mockResponse(t, http.StatusOK, mockSearchResult),
+	})
+
+	client := github.NewClient(mockedClient)
+	serverTool := SearchCode(translations.NullTranslationHelper)
+	deps := BaseDeps{Client: client}
+	handler := serverTool.Handler(deps)
+
+	request := createMCPRequest(map[string]interface{}{"query": "fmt.Println"})
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+
+	require.NoError(t, err)
+	textContent := getTextResult(t, result)
+	var returnedResult github.CodeSearchResult
+	err = json.Unmarshal([]byte(textContent.Text), &returnedResult)
+	require.NoError(t, err)
+
+	assert.Equal(t, "evil.go ", *returnedResult.CodeResults[0].Name)
+	assert.Equal(t, "test-repo ", *returnedResult.CodeResults[0].Repository.Name)
+	assert.NotContains(t, *returnedResult.CodeResults[0].Repository.Description, "onerror")
+}
+
 func Test_SearchRepositories_FullOutput(t *testing.T) {
 	mockSearchResult := &github.RepositoriesSearchResult{
 		Total:             github.Ptr(1),
@@ -226,6 +263,41 @@ func Test_SearchRepositories_FullOutput(t *testing.T) {
 	assert.Len(t, returnedResult.Repositories, 1)
 	assert.Equal(t, *mockSearchResult.Repositories[0].ID, *returnedResult.Repositories[0].ID)
 	assert.Equal(t, *mockSearchResult.Repositories[0].Name, *returnedResult.Repositories[0].Name)
+}
+
+func Test_SearchRepositories_Sanitization(t *testing.T) {
+	mockSearchResult := &github.RepositoriesSearchResult{
+		Total:             github.Ptr(1),
+		IncompleteResults: github.Ptr(false),
+		Repositories: []*github.Repository{
+			{
+				ID:          github.Ptr(int64(12345)),
+				Name:        github.Ptr("test-repo <script>alert(1)</script>"),
+				Description: github.Ptr("Test repository <img src=x onerror=alert(1)>"),
+			},
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetSearchRepositories: mockResponse(t, http.StatusOK, mockSearchResult),
+	})
+
+	client := github.NewClient(mockedClient)
+	serverTool := SearchRepositories(translations.NullTranslationHelper)
+	deps := BaseDeps{Client: client}
+	handler := serverTool.Handler(deps)
+
+	request := createMCPRequest(map[string]interface{}{"query": "golang test"})
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+
+	require.NoError(t, err)
+	textContent := getTextResult(t, result)
+	var returnedResult MinimalSearchRepositoriesResult
+	err = json.Unmarshal([]byte(textContent.Text), &returnedResult)
+	require.NoError(t, err)
+
+	assert.Equal(t, "test-repo ", returnedResult.Items[0].Name)
+	assert.NotContains(t, returnedResult.Items[0].Description, "onerror")
 }
 
 func Test_SearchCode(t *testing.T) {
@@ -724,4 +796,35 @@ func Test_SearchOrgs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_SearchUsers_Sanitization(t *testing.T) {
+	mockSearchResult := &github.UsersSearchResult{
+		Total: github.Ptr(1),
+		Users: []*github.User{
+			{
+				Login: github.Ptr("user1 <script>alert(1)</script>"),
+			},
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetSearchUsers: mockResponse(t, http.StatusOK, mockSearchResult),
+	})
+
+	client := github.NewClient(mockedClient)
+	serverTool := SearchUsers(translations.NullTranslationHelper)
+	deps := BaseDeps{Client: client}
+	handler := serverTool.Handler(deps)
+
+	request := createMCPRequest(map[string]interface{}{"query": "john"})
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+
+	require.NoError(t, err)
+	textContent := getTextResult(t, result)
+	var returnedResult MinimalSearchUsersResult
+	err = json.Unmarshal([]byte(textContent.Text), &returnedResult)
+	require.NoError(t, err)
+
+	assert.Equal(t, "user1 ", returnedResult.Items[0].Login)
 }

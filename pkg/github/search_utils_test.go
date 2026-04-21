@@ -1,9 +1,14 @@
 package github
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
 	"testing"
 
+	"github.com/google/go-github/v79/github"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_hasFilter(t *testing.T) {
@@ -111,6 +116,53 @@ func Test_hasFilter(t *testing.T) {
 			assert.Equal(t, tt.expected, result, "hasFilter(%q, %q) = %v, expected %v", tt.query, tt.filterType, result, tt.expected)
 		})
 	}
+}
+
+func Test_searchHandler_Sanitization(t *testing.T) {
+	mockResult := &github.IssuesSearchResult{
+		Total: github.Ptr(1),
+		Issues: []*github.Issue{
+			{
+				Title: github.Ptr("Normal Title <script>alert('xss')</script>"),
+				Body:  github.Ptr("Normal Body <img src=x onerror=alert('xss')>"),
+				Labels: []*github.Label{
+					{
+						Name:        github.Ptr("<b>Bold Label</b>"),
+						Description: github.Ptr("<i>Italic Description</i>"),
+					},
+				},
+			},
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetSearchIssues: mockResponse(t, http.StatusOK, mockResult),
+	})
+
+	client := github.NewClient(mockedClient)
+
+	args := map[string]any{
+		"query": "some query",
+	}
+
+	result, err := searchHandler(context.Background(), func(ctx context.Context) (*github.Client, error) {
+		return client, nil
+	}, args, "issue", "failed to search issues")
+
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+
+	textContent := getTextResult(t, result)
+	var returnedResult github.IssuesSearchResult
+	err = json.Unmarshal([]byte(textContent.Text), &returnedResult)
+	require.NoError(t, err)
+
+	// Verify sanitization
+	assert.Equal(t, "Normal Title ", *returnedResult.Issues[0].Title)
+	assert.NotContains(t, *returnedResult.Issues[0].Body, "onerror")
+	assert.Contains(t, *returnedResult.Issues[0].Body, "Normal Body")
+	assert.Equal(t, "<b>Bold Label</b>", *returnedResult.Issues[0].Labels[0].Name)
+	assert.Equal(t, "<i>Italic Description</i>", *returnedResult.Issues[0].Labels[0].Description)
 }
 
 func Test_hasRepoFilter(t *testing.T) {

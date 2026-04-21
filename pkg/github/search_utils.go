@@ -9,6 +9,7 @@ import (
 	"regexp"
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/utils"
 	"github.com/google/go-github/v79/github"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -106,6 +107,30 @@ func searchHandler(
 			return utils.NewToolResultErrorFromErr(errorPrefix+": failed to read response body", err), nil
 		}
 		return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, errorPrefix, resp, body), nil
+	}
+
+	// Sanitize results to prevent XSS
+	for _, issue := range result.Issues {
+		if issue == nil {
+			continue
+		}
+		if issue.Title != nil {
+			issue.Title = github.Ptr(sanitize.Sanitize(*issue.Title))
+		}
+		if issue.Body != nil {
+			issue.Body = github.Ptr(sanitize.Sanitize(*issue.Body))
+		}
+		for _, label := range issue.Labels {
+			if label == nil {
+				continue
+			}
+			if label.Name != nil {
+				label.Name = github.Ptr(sanitize.Sanitize(*label.Name))
+			}
+			if label.Description != nil {
+				label.Description = github.Ptr(sanitize.Sanitize(*label.Description))
+			}
+		}
 	}
 
 	r, err := json.Marshal(result)
