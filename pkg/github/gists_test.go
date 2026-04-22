@@ -136,6 +136,29 @@ func Test_ListGists(t *testing.T) {
 			expectError:    true,
 			expectedErrMsg: "failed to list gists",
 		},
+		{
+			name: "list gists with malicious description",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetGists: mockResponse(t, http.StatusOK, []*github.Gist{
+					{
+						ID:          github.Ptr("malicious-gist"),
+						Description: github.Ptr("Malicious <script>alert('xss')</script>Description"),
+						HTMLURL:     github.Ptr("https://gist.github.com/user/malicious"),
+						Public:      github.Ptr(true),
+					},
+				}),
+			}),
+			requestArgs: map[string]interface{}{},
+			expectError: false,
+			expectedGists: []*github.Gist{
+				{
+					ID:          github.Ptr("malicious-gist"),
+					Description: github.Ptr("Malicious Description"),
+					HTMLURL:     github.Ptr("https://gist.github.com/user/malicious"),
+					Public:      github.Ptr(true),
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -246,6 +269,27 @@ func Test_GetGist(t *testing.T) {
 			requestArgs:    map[string]interface{}{},
 			expectError:    true,
 			expectedErrMsg: "missing required parameter: gist_id",
+		},
+		{
+			name: "Get gist with malicious description",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetGistsByGistID: mockResponse(t, http.StatusOK, github.Gist{
+					ID:          github.Ptr("malicious-gist"),
+					Description: github.Ptr("Malicious <script>alert('xss')</script>Description"),
+					HTMLURL:     github.Ptr("https://gist.github.com/user/malicious"),
+					Public:      github.Ptr(true),
+				}),
+			}),
+			requestArgs: map[string]interface{}{
+				"gist_id": "malicious-gist",
+			},
+			expectError: false,
+			expectedGists: github.Gist{
+				ID:          github.Ptr("malicious-gist"),
+				Description: github.Ptr("Malicious Description"),
+				HTMLURL:     github.Ptr("https://gist.github.com/user/malicious"),
+				Public:      github.Ptr(true),
+			},
 		},
 	}
 
