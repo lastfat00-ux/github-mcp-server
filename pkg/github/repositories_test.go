@@ -3857,6 +3857,32 @@ func Test_ListStarredRepositories(t *testing.T) {
 	}
 }
 
+func Test_ListStarredRepositories_Security(t *testing.T) {
+	serverTool := ListStarredRepositories(translations.NullTranslationHelper)
+	mockStarredRepos := []*github.StarredRepository{
+		{
+			Repository: &github.Repository{
+				Name:        github.Ptr("awesome-repo"),
+				Description: github.Ptr("Awesome repo <script>alert('xss')</script>"),
+			},
+		},
+	}
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetUserStarred: mockResponse(t, http.StatusOK, mockStarredRepos),
+	})
+	client := github.NewClient(mockedClient)
+	deps := BaseDeps{Client: client}
+	handler := serverTool.Handler(deps)
+	request := createMCPRequest(map[string]interface{}{})
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+	require.NoError(t, err)
+	textContent := getTextResult(t, result)
+	var returnedRepos []MinimalRepository
+	err = json.Unmarshal([]byte(textContent.Text), &returnedRepos)
+	require.NoError(t, err)
+	assert.Equal(t, "Awesome repo ", returnedRepos[0].Description)
+}
+
 func Test_StarRepository(t *testing.T) {
 	// Verify tool definition once
 	serverTool := StarRepository(translations.NullTranslationHelper)
