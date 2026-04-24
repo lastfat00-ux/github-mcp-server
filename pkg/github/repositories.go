@@ -1684,12 +1684,8 @@ func ListReleases(t translations.TranslationHelperFunc) inventory.ServerTool {
 			}
 
 			for _, r := range releases {
-				if r.Name != nil {
-					r.Name = github.Ptr(sanitize.Sanitize(*r.Name))
-				}
-				if r.Body != nil {
-					r.Body = github.Ptr(sanitize.Sanitize(*r.Body))
-				}
+				r.Name = github.Ptr(sanitize.Sanitize(r.GetName()))
+				r.Body = github.Ptr(sanitize.Sanitize(r.GetBody()))
 			}
 			r, err := json.Marshal(releases)
 			if err != nil {
@@ -1757,12 +1753,8 @@ func GetLatestRelease(t translations.TranslationHelperFunc) inventory.ServerTool
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get latest release", resp, body), nil, nil
 			}
 
-			if release.Name != nil {
-				release.Name = github.Ptr(sanitize.Sanitize(*release.Name))
-			}
-			if release.Body != nil {
-				release.Body = github.Ptr(sanitize.Sanitize(*release.Body))
-			}
+			release.Name = github.Ptr(sanitize.Sanitize(release.GetName()))
+			release.Body = github.Ptr(sanitize.Sanitize(release.GetBody()))
 			r, err := json.Marshal(release)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -1840,12 +1832,8 @@ func GetReleaseByTag(t translations.TranslationHelperFunc) inventory.ServerTool 
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get release by tag", resp, body), nil, nil
 			}
 
-			if release.Name != nil {
-				release.Name = github.Ptr(sanitize.Sanitize(*release.Name))
-			}
-			if release.Body != nil {
-				release.Body = github.Ptr(sanitize.Sanitize(*release.Body))
-			}
+			release.Name = github.Ptr(sanitize.Sanitize(release.GetName()))
+			release.Body = github.Ptr(sanitize.Sanitize(release.GetBody()))
 			r, err := json.Marshal(release)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal response: %w", err)

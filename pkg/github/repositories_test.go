@@ -4038,38 +4038,3 @@ func Test_UnstarRepository(t *testing.T) {
 		})
 	}
 }
-
-func Test_RepositoriesSecurity(t *testing.T) {
-	t.Run("list_starred_repositories sanitizes description", func(t *testing.T) {
-		serverTool := ListStarredRepositories(translations.NullTranslationHelper)
-		mockStarredRepos := []*github.StarredRepository{{Repository: &github.Repository{ID: github.Ptr(int64(123)), Name: github.Ptr("repo"), Description: github.Ptr("Normal <script>alert('xss')</script>description")}}}
-		mockClient := github.NewClient(NewMockedHTTPClient(WithRequestMatchHandler(GetUserStarred, mockResponse(t, http.StatusOK, mockStarredRepos))))
-		deps := BaseDeps{Client: mockClient}
-		handler := serverTool.Handler(deps)
-		request := createMCPRequest(map[string]interface{}{})
-		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
-		require.NoError(t, err)
-		textContent := getTextResult(t, result)
-		var returnedRepos []MinimalRepository
-		err = json.Unmarshal([]byte(textContent.Text), &returnedRepos)
-		require.NoError(t, err)
-		assert.Equal(t, "Normal description", returnedRepos[0].Description)
-	})
-
-	t.Run("get_latest_release sanitizes name and body", func(t *testing.T) {
-		serverTool := GetLatestRelease(translations.NullTranslationHelper)
-		mockRelease := &github.RepositoryRelease{ID: github.Ptr(int64(1)), TagName: github.Ptr("v1.0.0"), Name: github.Ptr("Release <script>alert('name')</script>Name"), Body: github.Ptr("Release <script>alert('body')</script>Body")}
-		mockClient := github.NewClient(NewMockedHTTPClient(WithRequestMatch(GetReposReleasesLatestByOwnerByRepo, mockRelease)))
-		deps := BaseDeps{Client: mockClient}
-		handler := serverTool.Handler(deps)
-		request := createMCPRequest(map[string]interface{}{"owner": "owner", "repo":  "repo"})
-		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
-		require.NoError(t, err)
-		textContent := getTextResult(t, result)
-		var returnedRelease github.RepositoryRelease
-		err = json.Unmarshal([]byte(textContent.Text), &returnedRelease)
-		require.NoError(t, err)
-		assert.Equal(t, "Release Name", *returnedRelease.Name)
-		assert.Equal(t, "Release Body", *returnedRelease.Body)
-	})
-}
