@@ -725,3 +725,21 @@ func Test_SearchOrgs(t *testing.T) {
 		})
 	}
 }
+
+func Test_SearchRepositoriesSecurity(t *testing.T) {
+	t.Run("search_repositories sanitizes description", func(t *testing.T) {
+		serverTool := SearchRepositories(translations.NullTranslationHelper)
+		mockResult := &github.RepositoriesSearchResult{Total: github.Ptr(1), Repositories: []*github.Repository{{ID: github.Ptr(int64(123)), Name: github.Ptr("repo"), Description: github.Ptr("Search <script>alert('xss')</script>result")}}}
+		mockClient := github.NewClient(NewMockedHTTPClient(WithRequestMatch(GetSearchRepositories, mockResult)))
+		deps := BaseDeps{Client: mockClient}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{"query": "test"})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		textContent := getTextResult(t, result)
+		var returnedResult MinimalSearchRepositoriesResult
+		err = json.Unmarshal([]byte(textContent.Text), &returnedResult)
+		require.NoError(t, err)
+		assert.Equal(t, "Search result", returnedResult.Items[0].Description)
+	})
+}

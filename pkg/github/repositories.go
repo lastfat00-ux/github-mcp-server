@@ -12,6 +12,7 @@ import (
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/octicons"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -1682,6 +1683,14 @@ func ListReleases(t translations.TranslationHelperFunc) inventory.ServerTool {
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list releases", resp, body), nil, nil
 			}
 
+			for _, r := range releases {
+				if r.Name != nil {
+					r.Name = github.Ptr(sanitize.Sanitize(*r.Name))
+				}
+				if r.Body != nil {
+					r.Body = github.Ptr(sanitize.Sanitize(*r.Body))
+				}
+			}
 			r, err := json.Marshal(releases)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -1748,6 +1757,12 @@ func GetLatestRelease(t translations.TranslationHelperFunc) inventory.ServerTool
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get latest release", resp, body), nil, nil
 			}
 
+			if release.Name != nil {
+				release.Name = github.Ptr(sanitize.Sanitize(*release.Name))
+			}
+			if release.Body != nil {
+				release.Body = github.Ptr(sanitize.Sanitize(*release.Body))
+			}
 			r, err := json.Marshal(release)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -1825,6 +1840,12 @@ func GetReleaseByTag(t translations.TranslationHelperFunc) inventory.ServerTool 
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get release by tag", resp, body), nil, nil
 			}
 
+			if release.Name != nil {
+				release.Name = github.Ptr(sanitize.Sanitize(*release.Name))
+			}
+			if release.Body != nil {
+				release.Body = github.Ptr(sanitize.Sanitize(*release.Body))
+			}
 			r, err := json.Marshal(release)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -1938,7 +1959,7 @@ func ListStarredRepositories(t translations.TranslationHelperFunc) inventory.Ser
 					ID:            repo.GetID(),
 					Name:          repo.GetName(),
 					FullName:      repo.GetFullName(),
-					Description:   repo.GetDescription(),
+					Description:   sanitize.Sanitize(repo.GetDescription()),
 					HTMLURL:       repo.GetHTMLURL(),
 					Language:      repo.GetLanguage(),
 					Stars:         repo.GetStargazersCount(),
