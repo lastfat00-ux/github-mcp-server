@@ -8,6 +8,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -81,6 +82,16 @@ func GetCodeScanningAlert(t translations.TranslationHelperFunc) inventory.Server
 					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, nil
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get alert", resp, body), nil, nil
+			}
+
+			// Sanitize rule description to prevent XSS from untrusted user content
+			if alert != nil {
+				if alert.RuleDescription != nil {
+					alert.RuleDescription = github.Ptr(sanitize.Sanitize(*alert.RuleDescription))
+				}
+				if alert.Rule != nil && alert.Rule.Description != nil {
+					alert.Rule.Description = github.Ptr(sanitize.Sanitize(*alert.Rule.Description))
+				}
 			}
 
 			r, err := json.Marshal(alert)

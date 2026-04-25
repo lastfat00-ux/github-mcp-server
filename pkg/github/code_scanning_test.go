@@ -60,6 +60,31 @@ func Test_GetCodeScanningAlert(t *testing.T) {
 			expectedAlert: mockAlert,
 		},
 		{
+			name: "successful alert fetch with malicious payload",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetReposCodeScanningAlertsByOwnerByRepoByAlertNumber: mockResponse(t, http.StatusOK, &github.Alert{
+					Number:          github.Ptr(42),
+					State:           github.Ptr("open"),
+					RuleDescription: github.Ptr("Rule Description <script>alert('xss')</script>"),
+					Rule:            &github.Rule{ID: github.Ptr("test-rule"), Description: github.Ptr("Test Rule Description")},
+					HTMLURL:         github.Ptr("https://github.com/owner/repo/security/code-scanning/42"),
+				}),
+			}),
+			requestArgs: map[string]interface{}{
+				"owner":       "owner",
+				"repo":        "repo",
+				"alertNumber": float64(42),
+			},
+			expectError: false,
+			expectedAlert: &github.Alert{
+				Number:          github.Ptr(42),
+				State:           github.Ptr("open"),
+				RuleDescription: github.Ptr("Rule Description "),
+				Rule:            &github.Rule{ID: github.Ptr("test-rule"), Description: github.Ptr("Test Rule Description")},
+				HTMLURL:         github.Ptr("https://github.com/owner/repo/security/code-scanning/42"),
+			},
+		},
+		{
 			name: "alert fetch fails",
 			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
 				GetReposCodeScanningAlertsByOwnerByRepoByAlertNumber: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -113,6 +138,9 @@ func Test_GetCodeScanningAlert(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, *tc.expectedAlert.Number, *returnedAlert.Number)
 			assert.Equal(t, *tc.expectedAlert.State, *returnedAlert.State)
+			if tc.expectedAlert.RuleDescription != nil {
+				assert.Equal(t, *tc.expectedAlert.RuleDescription, *returnedAlert.RuleDescription)
+			}
 			assert.Equal(t, *tc.expectedAlert.Rule.ID, *returnedAlert.Rule.ID)
 			assert.Equal(t, *tc.expectedAlert.HTMLURL, *returnedAlert.HTMLURL)
 
