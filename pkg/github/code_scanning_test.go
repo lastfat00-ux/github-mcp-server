@@ -38,6 +38,36 @@ func Test_GetCodeScanningAlert(t *testing.T) {
 		HTMLURL: github.Ptr("https://github.com/owner/repo/security/code-scanning/42"),
 	}
 
+	mockXSSAlert := &github.Alert{
+		Number:           github.Ptr(44),
+		State:            github.Ptr("open"),
+		RuleDescription:  github.Ptr("Rule <script>alert('xss')</script> Description"),
+		DismissedComment: github.Ptr("Dismissed <img src=x onerror=alert('xss')>"),
+		Rule: &github.Rule{
+			ID:              github.Ptr("xss-rule"),
+			Description:     github.Ptr("Description <script>alert('xss')</script>"),
+			FullDescription: github.Ptr("Full Description <script>alert('xss')</script>"),
+			Help:            github.Ptr("Help <script>alert('xss')</script>"),
+			Name:            github.Ptr("Name <script>alert('xss')</script>"),
+		},
+		HTMLURL: github.Ptr("https://github.com/owner/repo/security/code-scanning/44"),
+	}
+
+	expectedXSSAlert := &github.Alert{
+		Number:           github.Ptr(44),
+		State:            github.Ptr("open"),
+		RuleDescription:  github.Ptr("Rule  Description"),
+		DismissedComment: github.Ptr("Dismissed <img src=\"x\">"),
+		Rule: &github.Rule{
+			ID:              github.Ptr("xss-rule"),
+			Description:     github.Ptr("Description "),
+			FullDescription: github.Ptr("Full Description "),
+			Help:            github.Ptr("Help "),
+			Name:            github.Ptr("Name "),
+		},
+		HTMLURL: github.Ptr("https://github.com/owner/repo/security/code-scanning/44"),
+	}
+
 	tests := []struct {
 		name           string
 		mockedClient   *http.Client
@@ -58,6 +88,19 @@ func Test_GetCodeScanningAlert(t *testing.T) {
 			},
 			expectError:   false,
 			expectedAlert: mockAlert,
+		},
+		{
+			name: "successful alert fetch with sanitization",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetReposCodeScanningAlertsByOwnerByRepoByAlertNumber: mockResponse(t, http.StatusOK, mockXSSAlert),
+			}),
+			requestArgs: map[string]interface{}{
+				"owner":       "owner",
+				"repo":        "repo",
+				"alertNumber": float64(44),
+			},
+			expectError:   false,
+			expectedAlert: expectedXSSAlert,
 		},
 		{
 			name: "alert fetch fails",
@@ -116,6 +159,27 @@ func Test_GetCodeScanningAlert(t *testing.T) {
 			assert.Equal(t, *tc.expectedAlert.Rule.ID, *returnedAlert.Rule.ID)
 			assert.Equal(t, *tc.expectedAlert.HTMLURL, *returnedAlert.HTMLURL)
 
+			if tc.expectedAlert.RuleDescription != nil {
+				assert.Equal(t, *tc.expectedAlert.RuleDescription, *returnedAlert.RuleDescription)
+			}
+			if tc.expectedAlert.DismissedComment != nil {
+				assert.Equal(t, *tc.expectedAlert.DismissedComment, *returnedAlert.DismissedComment)
+			}
+			if tc.expectedAlert.Rule != nil {
+				if tc.expectedAlert.Rule.Description != nil {
+					assert.Equal(t, *tc.expectedAlert.Rule.Description, *returnedAlert.Rule.Description)
+				}
+				if tc.expectedAlert.Rule.FullDescription != nil {
+					assert.Equal(t, *tc.expectedAlert.Rule.FullDescription, *returnedAlert.Rule.FullDescription)
+				}
+				if tc.expectedAlert.Rule.Help != nil {
+					assert.Equal(t, *tc.expectedAlert.Rule.Help, *returnedAlert.Rule.Help)
+				}
+				if tc.expectedAlert.Rule.Name != nil {
+					assert.Equal(t, *tc.expectedAlert.Rule.Name, *returnedAlert.Rule.Name)
+				}
+			}
+
 		})
 	}
 }
@@ -155,6 +219,22 @@ func Test_ListCodeScanningAlerts(t *testing.T) {
 		},
 	}
 
+	mockXSSAlerts := []*github.Alert{
+		{
+			Number:  github.Ptr(44),
+			Rule:    &github.Rule{ID: github.Ptr("xss-rule"), Description: github.Ptr("Description <script>alert('xss')</script>")},
+			HTMLURL: github.Ptr("https://github.com/owner/repo/security/code-scanning/44"),
+		},
+	}
+
+	expectedXSSAlerts := []*github.Alert{
+		{
+			Number:  github.Ptr(44),
+			Rule:    &github.Rule{ID: github.Ptr("xss-rule"), Description: github.Ptr("Description ")},
+			HTMLURL: github.Ptr("https://github.com/owner/repo/security/code-scanning/44"),
+		},
+	}
+
 	tests := []struct {
 		name           string
 		mockedClient   *http.Client
@@ -185,6 +265,18 @@ func Test_ListCodeScanningAlerts(t *testing.T) {
 			},
 			expectError:    false,
 			expectedAlerts: mockAlerts,
+		},
+		{
+			name: "successful alerts listing with sanitization",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetReposCodeScanningAlertsByOwnerByRepo: mockResponse(t, http.StatusOK, mockXSSAlerts),
+			}),
+			requestArgs: map[string]interface{}{
+				"owner": "owner",
+				"repo":  "repo",
+			},
+			expectError:    false,
+			expectedAlerts: expectedXSSAlerts,
 		},
 		{
 			name: "alerts listing fails",
@@ -240,9 +332,15 @@ func Test_ListCodeScanningAlerts(t *testing.T) {
 			assert.Len(t, returnedAlerts, len(tc.expectedAlerts))
 			for i, alert := range returnedAlerts {
 				assert.Equal(t, *tc.expectedAlerts[i].Number, *alert.Number)
-				assert.Equal(t, *tc.expectedAlerts[i].State, *alert.State)
+				if tc.expectedAlerts[i].State != nil {
+					assert.Equal(t, *tc.expectedAlerts[i].State, *alert.State)
+				}
 				assert.Equal(t, *tc.expectedAlerts[i].Rule.ID, *alert.Rule.ID)
 				assert.Equal(t, *tc.expectedAlerts[i].HTMLURL, *alert.HTMLURL)
+
+				if tc.expectedAlerts[i].Rule.Description != nil {
+					assert.Equal(t, *tc.expectedAlerts[i].Rule.Description, *alert.Rule.Description)
+				}
 			}
 		})
 	}
