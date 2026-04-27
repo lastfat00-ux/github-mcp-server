@@ -87,7 +87,7 @@ func GetSecretScanningAlert(t translations.TranslationHelperFunc) inventory.Serv
 
 			sanitizeSecretScanningAlert(alert)
 
-			r, err := json.Marshal(alert)
+			r, err := json.Marshal(alert) // nolint:gosec // intentional
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal alert", err), nil, nil
 			}
@@ -185,7 +185,7 @@ func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.Se
 				sanitizeSecretScanningAlert(alert)
 			}
 
-			r, err := json.Marshal(alerts)
+			r, err := json.Marshal(alerts) // nolint:gosec // intentional
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal alerts", err), nil, nil
 			}

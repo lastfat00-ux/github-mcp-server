@@ -64,7 +64,7 @@ func GetDependabotAlert(t translations.TranslationHelperFunc) inventory.ServerTo
 
 			client, err := deps.GetClient(ctx)
 			if err != nil {
-				return utils.NewToolResultErrorFromErr("failed to get GitHub client", err), nil, nil
+				return utils.NewToolResultErrorFromErr("failed to get GitHub client", err), nil, err
 			}
 
 			alert, resp, err := client.Dependabot.GetRepoAlert(ctx, owner, repo, alertNumber)
@@ -80,7 +80,7 @@ func GetDependabotAlert(t translations.TranslationHelperFunc) inventory.ServerTo
 			if resp.StatusCode != http.StatusOK {
 				body, err := io.ReadAll(resp.Body)
 				if err != nil {
-					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, nil
+					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, err
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get alert", resp, body), nil, nil
 			}
@@ -154,7 +154,7 @@ func ListDependabotAlerts(t translations.TranslationHelperFunc) inventory.Server
 
 			client, err := deps.GetClient(ctx)
 			if err != nil {
-				return utils.NewToolResultErrorFromErr("failed to get GitHub client", err), nil, nil
+				return utils.NewToolResultErrorFromErr("failed to get GitHub client", err), nil, err
 			}
 
 			alerts, resp, err := client.Dependabot.ListRepoAlerts(ctx, owner, repo, &github.ListAlertsOptions{
@@ -173,7 +173,7 @@ func ListDependabotAlerts(t translations.TranslationHelperFunc) inventory.Server
 			if resp.StatusCode != http.StatusOK {
 				body, err := io.ReadAll(resp.Body)
 				if err != nil {
-					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, nil
+					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, err
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list alerts", resp, body), nil, nil
 			}
