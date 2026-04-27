@@ -9,6 +9,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -84,9 +85,11 @@ func GetSecretScanningAlert(t translations.TranslationHelperFunc) inventory.Serv
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get alert", resp, body), nil, nil
 			}
 
-			r, err := json.Marshal(alert)
+			sanitizeSecretScanningAlert(alert)
+
+			r, err := json.Marshal(alert) // nolint:gosec // intentional
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to marshal alert: %w", err)
+				return utils.NewToolResultErrorFromErr("failed to marshal alert", err), nil, nil
 			}
 
 			return utils.NewToolResultText(string(r)), nil, nil
@@ -178,12 +181,25 @@ func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.Se
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list alerts", resp, body), nil, nil
 			}
 
-			r, err := json.Marshal(alerts)
+			for _, alert := range alerts {
+				sanitizeSecretScanningAlert(alert)
+			}
+
+			r, err := json.Marshal(alerts) // nolint:gosec // intentional
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to marshal alerts: %w", err)
+				return utils.NewToolResultErrorFromErr("failed to marshal alerts", err), nil, nil
 			}
 
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+func sanitizeSecretScanningAlert(alert *github.SecretScanningAlert) {
+	if alert == nil {
+		return
+	}
+	if alert.ResolutionComment != nil {
+		alert.ResolutionComment = github.Ptr(sanitize.Sanitize(*alert.ResolutionComment))
+	}
 }
