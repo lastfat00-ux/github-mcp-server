@@ -89,7 +89,7 @@ func GetSecretScanningAlert(t translations.TranslationHelperFunc) inventory.Serv
 
 			r, err := json.Marshal(alert)
 			if err != nil {
-				return utils.NewToolResultErrorFromErr("failed to marshal alert", err), nil, err
+				return utils.NewToolResultErrorFromErr("failed to marshal alert", err), nil, nil
 			}
 
 			return utils.NewToolResultText(string(r)), nil, nil
@@ -187,7 +187,7 @@ func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.Se
 
 			r, err := json.Marshal(alerts)
 			if err != nil {
-				return utils.NewToolResultErrorFromErr("failed to marshal alerts", err), nil, err
+				return utils.NewToolResultErrorFromErr("failed to marshal alerts", err), nil, nil
 			}
 
 			return utils.NewToolResultText(string(r)), nil, nil
