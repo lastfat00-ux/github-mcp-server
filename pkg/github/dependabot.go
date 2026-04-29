@@ -9,6 +9,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -82,6 +83,10 @@ func GetDependabotAlert(t translations.TranslationHelperFunc) inventory.ServerTo
 					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, err
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get alert", resp, body), nil, nil
+			}
+
+			if alert.DismissedComment != nil {
+				alert.DismissedComment = github.Ptr(sanitize.Sanitize(*alert.DismissedComment))
 			}
 
 			r, err := json.Marshal(alert)
@@ -173,6 +178,12 @@ func ListDependabotAlerts(t translations.TranslationHelperFunc) inventory.Server
 					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, err
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list alerts", resp, body), nil, nil
+			}
+
+			for _, alert := range alerts {
+				if alert.DismissedComment != nil {
+					alert.DismissedComment = github.Ptr(sanitize.Sanitize(*alert.DismissedComment))
+				}
 			}
 
 			r, err := json.Marshal(alerts)
