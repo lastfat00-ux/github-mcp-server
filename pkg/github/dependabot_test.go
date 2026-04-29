@@ -107,6 +107,31 @@ func Test_GetDependabotAlert(t *testing.T) {
 			assert.Equal(t, *tc.expectedAlert.HTMLURL, *returnedAlert.HTMLURL)
 		})
 	}
+
+	t.Run("sanitizes dismissed comment", func(t *testing.T) {
+		payload := "<script>alert(1)</script><b>Safe</b>"
+		expected := "<b>Safe</b>"
+		mockAlert := &github.DependabotAlert{
+			Number:           github.Ptr(1),
+			DismissedComment: github.Ptr(payload),
+		}
+
+		client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetReposDependabotAlertsByOwnerByRepoByAlertNumber: mockResponse(t, http.StatusOK, mockAlert),
+		}))
+		deps := BaseDeps{Client: client}
+		tool := GetDependabotAlert(translations.NullTranslationHelper)
+		handler := tool.Handler(deps)
+
+		req := createMCPRequest(map[string]any{"owner": "o", "repo": "r", "alertNumber": 1.0})
+		res, err := handler(ContextWithDeps(context.Background(), deps), &req)
+
+		require.NoError(t, err)
+		var out github.DependabotAlert
+		err = json.Unmarshal([]byte(getTextResult(t, res).Text), &out)
+		assert.NoError(t, err)
+		assert.Equal(t, expected, *out.DismissedComment)
+	})
 }
 
 func Test_ListDependabotAlerts(t *testing.T) {
