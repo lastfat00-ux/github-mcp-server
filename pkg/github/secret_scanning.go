@@ -9,6 +9,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -82,6 +83,11 @@ func GetSecretScanningAlert(t translations.TranslationHelperFunc) inventory.Serv
 					return nil, nil, fmt.Errorf("failed to read response body: %w", err)
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get alert", resp, body), nil, nil
+			}
+
+			// Sanitize untrusted user-generated content in the alert
+			if alert.ResolutionComment != nil {
+				alert.ResolutionComment = github.Ptr(sanitize.Sanitize(*alert.ResolutionComment))
 			}
 
 			r, err := json.Marshal(alert)
@@ -176,6 +182,13 @@ func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.Se
 					return nil, nil, fmt.Errorf("failed to read response body: %w", err)
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list alerts", resp, body), nil, nil
+			}
+
+			// Sanitize untrusted user-generated content in all alerts
+			for _, alert := range alerts {
+				if alert.ResolutionComment != nil {
+					alert.ResolutionComment = github.Ptr(sanitize.Sanitize(*alert.ResolutionComment))
+				}
 			}
 
 			r, err := json.Marshal(alerts)
