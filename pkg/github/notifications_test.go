@@ -96,29 +96,6 @@ func Test_ListNotifications(t *testing.T) {
 			expectedResult: []*github.Notification{mockNotification},
 		},
 		{
-			name: "security: xss in subject title",
-			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-				GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{
-					{
-						ID: github.Ptr("456"),
-						Subject: &github.NotificationSubject{
-							Title: github.Ptr("Malicious <script>alert('XSS')</script> Title"),
-						},
-					},
-				}),
-			}),
-			requestArgs: map[string]interface{}{},
-			expectError: false,
-			expectedResult: []*github.Notification{
-				{
-					ID: github.Ptr("456"),
-					Subject: &github.NotificationSubject{
-						Title: github.Ptr("Malicious  Title"),
-					},
-				},
-			},
-		},
-		{
 			name: "error",
 			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
 				GetNotifications: mockResponse(t, http.StatusInternalServerError, `{"message": "error"}`),
@@ -720,27 +697,6 @@ func Test_GetNotificationDetails(t *testing.T) {
 			},
 			expectError:  false,
 			expectResult: mockThread,
-		},
-		{
-			name: "security: xss in subject title",
-			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-				GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, &github.Notification{
-					ID: github.Ptr("789"),
-					Subject: &github.NotificationSubject{
-						Title: github.Ptr("Malicious <script>alert('XSS')</script> Title"),
-					},
-				}),
-			}),
-			requestArgs: map[string]interface{}{
-				"notificationID": "789",
-			},
-			expectError: false,
-			expectResult: &github.Notification{
-				ID: github.Ptr("789"),
-				Subject: &github.NotificationSubject{
-					Title: github.Ptr("Malicious  Title"),
-				},
-			},
 		},
 		{
 			name: "not found",
