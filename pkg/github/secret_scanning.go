@@ -85,7 +85,7 @@ func GetSecretScanningAlert(t translations.TranslationHelperFunc) inventory.Serv
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get alert", resp, body), nil, nil
 			}
 
-			r, err := json.Marshal(sanitizeSecretScanningAlert(alert))
+			r, err := json.Marshal(sanitizeSecretScanningAlert(alert)) // nolint:gosec // intentional: this tool is designed to return secret scanning alerts which contain secret metadata
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal alert", err), nil, nil
 			}
@@ -198,7 +198,7 @@ func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.Se
 			for _, alert := range alerts {
 				sanitizeSecretScanningAlert(alert)
 			}
-			r, err := json.Marshal(alerts)
+			r, err := json.Marshal(alerts) // nolint:gosec // intentional: this tool is designed to return secret scanning alerts which contain secret metadata
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal alerts", err), nil, nil
 			}
