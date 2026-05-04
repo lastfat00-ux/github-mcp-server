@@ -9,6 +9,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -84,14 +85,30 @@ func GetSecretScanningAlert(t translations.TranslationHelperFunc) inventory.Serv
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get alert", resp, body), nil, nil
 			}
 
-			r, err := json.Marshal(alert)
+			r, err := json.Marshal(sanitizeSecretScanningAlert(alert))
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to marshal alert: %w", err)
+				return utils.NewToolResultErrorFromErr("failed to marshal alert", err), nil, nil
 			}
 
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+func sanitizeSecretScanningAlert(alert *github.SecretScanningAlert) *github.SecretScanningAlert {
+	if alert == nil {
+		return nil
+	}
+	if alert.ResolutionComment != nil {
+		alert.ResolutionComment = github.Ptr(sanitize.Sanitize(*alert.ResolutionComment))
+	}
+	if alert.PushProtectionBypassRequestComment != nil {
+		alert.PushProtectionBypassRequestComment = github.Ptr(sanitize.Sanitize(*alert.PushProtectionBypassRequestComment))
+	}
+	if alert.PushProtectionBypassRequestReviewerComment != nil {
+		alert.PushProtectionBypassRequestReviewerComment = github.Ptr(sanitize.Sanitize(*alert.PushProtectionBypassRequestReviewerComment))
+	}
+	return alert
 }
 
 func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.ServerTool {
@@ -178,9 +195,12 @@ func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.Se
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list alerts", resp, body), nil, nil
 			}
 
+			for _, alert := range alerts {
+				sanitizeSecretScanningAlert(alert)
+			}
 			r, err := json.Marshal(alerts)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to marshal alerts: %w", err)
+				return utils.NewToolResultErrorFromErr("failed to marshal alerts", err), nil, nil
 			}
 
 			return utils.NewToolResultText(string(r)), nil, nil

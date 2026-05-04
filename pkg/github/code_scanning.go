@@ -8,6 +8,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -83,7 +84,7 @@ func GetCodeScanningAlert(t translations.TranslationHelperFunc) inventory.Server
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get alert", resp, body), nil, nil
 			}
 
-			r, err := json.Marshal(alert)
+			r, err := json.Marshal(sanitizeCodeScanningAlert(alert))
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal alert", err), nil, nil
 			}
@@ -91,6 +92,22 @@ func GetCodeScanningAlert(t translations.TranslationHelperFunc) inventory.Server
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+func sanitizeCodeScanningAlert(alert *github.Alert) *github.Alert {
+	if alert == nil {
+		return nil
+	}
+	if alert.RuleDescription != nil {
+		alert.RuleDescription = github.Ptr(sanitize.Sanitize(*alert.RuleDescription))
+	}
+	if alert.Rule != nil && alert.Rule.Description != nil {
+		alert.Rule.Description = github.Ptr(sanitize.Sanitize(*alert.Rule.Description))
+	}
+	if alert.DismissedComment != nil {
+		alert.DismissedComment = github.Ptr(sanitize.Sanitize(*alert.DismissedComment))
+	}
+	return alert
 }
 
 func ListCodeScanningAlerts(t translations.TranslationHelperFunc) inventory.ServerTool {
@@ -186,6 +203,9 @@ func ListCodeScanningAlerts(t translations.TranslationHelperFunc) inventory.Serv
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list alerts", resp, body), nil, nil
 			}
 
+			for _, alert := range alerts {
+				sanitizeCodeScanningAlert(alert)
+			}
 			r, err := json.Marshal(alerts)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal alerts", err), nil, nil
