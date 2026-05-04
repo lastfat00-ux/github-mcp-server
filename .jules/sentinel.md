@@ -5,3 +5,11 @@
 **Learning:** While many web applications rely on client-side sanitization, an MCP server acts as a data provider for LLMs and various tools. Relying solely on client-side sanitization is risky because the rendering context of an LLM's output is not always known or secure. Sanitization must occur at the API response layer within the MCP server.
 
 **Prevention:** Always use `pkg/sanitize.Sanitize` on any untrusted string content fetched from external APIs (like GitHub Issues, PRs, and Discussions) before returning it in a tool result.
+
+## 2026-03-05 - Comprehensive XSS Sanitization for Security Alerts
+
+**Vulnerability:** Security alert metadata (Code Scanning descriptions, Dependabot advisory summaries, and Secret Scanning bypass comments) was returned unsanitized. Malicious actors could potentially inject XSS payloads into these fields (e.g., a "dismissal comment" containing a script).
+
+**Learning:** "Security" tools are not inherently safe. In fact, they are prime targets for XSS because they intentionally handle and display malicious strings. Sanitization must be applied even to metadata fields like comments and advisory summaries, not just the primary "body" or "title" of an item.
+
+**Prevention:** Implement struct-specific sanitization helpers (e.g., `sanitizeCodeScanningAlert`) for complex API response types and ensure they are applied consistently across all "Get" and "List" tool handlers.
