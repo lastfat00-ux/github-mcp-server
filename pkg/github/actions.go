@@ -110,12 +110,6 @@ func ListWorkflows(t translations.TranslationHelperFunc) inventory.ServerTool {
 			}
 			defer func() { _ = resp.Body.Close() }()
 
-			if workflows != nil {
-				for _, w := range workflows.Workflows {
-					sanitizeWorkflow(w)
-				}
-			}
-
 			r, err := json.Marshal(workflows)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -270,12 +264,6 @@ func ListWorkflowRuns(t translations.TranslationHelperFunc) inventory.ServerTool
 				return nil, nil, fmt.Errorf("failed to list workflow runs: %w", err)
 			}
 			defer func() { _ = resp.Body.Close() }()
-
-			if workflowRuns != nil {
-				for _, wr := range workflowRuns.WorkflowRuns {
-					sanitizeWorkflowRun(wr)
-				}
-			}
 
 			r, err := json.Marshal(workflowRuns)
 			if err != nil {
@@ -635,12 +623,6 @@ func ListWorkflowJobs(t translations.TranslationHelperFunc) inventory.ServerTool
 			}
 			defer func() { _ = resp.Body.Close() }()
 
-			if jobs != nil {
-				for _, j := range jobs.Jobs {
-					sanitizeWorkflowJob(j)
-				}
-			}
-
 			// Add optimization tip for failed job debugging
 			response := map[string]any{
 				"jobs":             jobs,
@@ -836,6 +818,21 @@ func handleFailedJobLogs(ctx context.Context, client *github.Client, owner, repo
 	return utils.NewToolResultText(string(r)), nil, nil
 }
 
+func sanitizeWorkflowRun(wr *github.WorkflowRun) {
+	if wr == nil {
+		return
+	}
+	if wr.Name != nil {
+		wr.Name = github.Ptr(sanitize.Sanitize(*wr.Name))
+	}
+	if wr.DisplayTitle != nil {
+		wr.DisplayTitle = github.Ptr(sanitize.Sanitize(*wr.DisplayTitle))
+	}
+	if wr.HeadBranch != nil {
+		wr.HeadBranch = github.Ptr(sanitize.Sanitize(*wr.HeadBranch))
+	}
+}
+
 // handleSingleJobLogs gets logs for a single job
 func handleSingleJobLogs(ctx context.Context, client *github.Client, owner, repo string, jobID int64, returnContent bool, tailLines int, contentWindowSize int) (*mcp.CallToolResult, any, error) {
 	jobResult, resp, err := getJobLogData(ctx, client, owner, repo, jobID, "", returnContent, tailLines, contentWindowSize)
@@ -864,7 +861,7 @@ func getJobLogData(ctx context.Context, client *github.Client, owner, repo strin
 		"job_id": jobID,
 	}
 	if jobName != "" {
-		result["job_name"] = sanitize.Sanitize(jobName)
+		result["job_name"] = jobName
 	}
 
 	if returnContent {
@@ -2020,9 +2017,6 @@ func getWorkflow(ctx context.Context, client *github.Client, owner, repo, resour
 	}
 
 	defer func() { _ = resp.Body.Close() }()
-
-	sanitizeWorkflow(workflow)
-
 	r, err := json.Marshal(workflow)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal workflow: %w", err)
@@ -2037,9 +2031,6 @@ func getWorkflowRun(ctx context.Context, client *github.Client, owner, repo stri
 		return ghErrors.NewGitHubAPIErrorResponse(ctx, "failed to get workflow run", resp, err), nil, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
-
-	sanitizeWorkflowRun(workflowRun)
-
 	r, err := json.Marshal(workflowRun)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal workflow run: %w", err)
@@ -2053,9 +2044,6 @@ func getWorkflowJob(ctx context.Context, client *github.Client, owner, repo stri
 		return ghErrors.NewGitHubAPIErrorResponse(ctx, "failed to get workflow job", resp, err), nil, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
-
-	sanitizeWorkflowJob(workflowJob)
-
 	r, err := json.Marshal(workflowJob)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal workflow job: %w", err)
@@ -2074,12 +2062,6 @@ func listWorkflows(ctx context.Context, client *github.Client, owner, repo strin
 		return ghErrors.NewGitHubAPIErrorResponse(ctx, "failed to list workflows", resp, err), nil, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
-
-	if workflows != nil {
-		for _, w := range workflows.Workflows {
-			sanitizeWorkflow(w)
-		}
-	}
 
 	r, err := json.Marshal(workflows)
 	if err != nil {
@@ -2131,13 +2113,6 @@ func listWorkflowRuns(ctx context.Context, client *github.Client, args map[strin
 	}
 
 	defer func() { _ = resp.Body.Close() }()
-
-	if workflowRuns != nil {
-		for _, wr := range workflowRuns.WorkflowRuns {
-			sanitizeWorkflowRun(wr)
-		}
-	}
-
 	r, err := json.Marshal(workflowRuns)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal workflow runs: %w", err)
@@ -2170,12 +2145,6 @@ func listWorkflowJobs(ctx context.Context, client *github.Client, args map[strin
 	})
 	if err != nil {
 		return ghErrors.NewGitHubAPIErrorResponse(ctx, "failed to list workflow jobs", resp, err), nil, nil
-	}
-
-	if workflowJobs != nil {
-		for _, wj := range workflowJobs.Jobs {
-			sanitizeWorkflowJob(wj)
-		}
 	}
 
 	response := map[string]any{
@@ -2405,33 +2374,4 @@ func deleteWorkflowRunLogs(ctx context.Context, client *github.Client, owner, re
 	}
 
 	return utils.NewToolResultText(string(r)), nil, nil
-}
-
-func ptrSanitize(s *string) *string {
-	if s == nil {
-		return nil
-	}
-	return github.Ptr(sanitize.Sanitize(*s))
-}
-
-func sanitizeWorkflow(w *github.Workflow) {
-	if w != nil {
-		w.Name = ptrSanitize(w.Name)
-	}
-}
-
-func sanitizeWorkflowRun(wr *github.WorkflowRun) {
-	if wr != nil {
-		wr.Name = ptrSanitize(wr.Name)
-		wr.DisplayTitle = ptrSanitize(wr.DisplayTitle)
-		wr.HeadBranch = ptrSanitize(wr.HeadBranch)
-	}
-}
-
-func sanitizeWorkflowJob(wj *github.WorkflowJob) {
-	if wj != nil {
-		wj.Name = ptrSanitize(wj.Name)
-		wj.HeadBranch = ptrSanitize(wj.HeadBranch)
-		wj.WorkflowName = ptrSanitize(wj.WorkflowName)
-	}
 }
