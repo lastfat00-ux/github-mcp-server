@@ -13,7 +13,6 @@ import (
 	buffer "github.com/github/github-mcp-server/pkg/buffer"
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
-	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -447,8 +446,6 @@ func GetWorkflowRun(t translations.TranslationHelperFunc) inventory.ServerTool {
 			}
 			defer func() { _ = resp.Body.Close() }()
 
-			sanitizeWorkflowRun(workflowRun)
-
 			r, err := json.Marshal(workflowRun)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -816,21 +813,6 @@ func handleFailedJobLogs(ctx context.Context, client *github.Client, owner, repo
 	}
 
 	return utils.NewToolResultText(string(r)), nil, nil
-}
-
-func sanitizeWorkflowRun(wr *github.WorkflowRun) {
-	if wr == nil {
-		return
-	}
-	if wr.Name != nil {
-		wr.Name = github.Ptr(sanitize.Sanitize(*wr.Name))
-	}
-	if wr.DisplayTitle != nil {
-		wr.DisplayTitle = github.Ptr(sanitize.Sanitize(*wr.DisplayTitle))
-	}
-	if wr.HeadBranch != nil {
-		wr.HeadBranch = github.Ptr(sanitize.Sanitize(*wr.HeadBranch))
-	}
 }
 
 // handleSingleJobLogs gets logs for a single job
