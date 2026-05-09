@@ -17,9 +17,9 @@ func Test_GistsSanitization(t *testing.T) {
 	expectedDescription := "Gist with  description"
 
 	mockGist := &gh.Gist{
-		ID:          gh.String("gist123"),
-		Description: gh.String(maliciousDescription),
-		HTMLURL:     gh.String("https://gist.github.com/user/gist123"),
+		ID:          gh.Ptr("gist123"),
+		Description: gh.Ptr(maliciousDescription),
+		HTMLURL:     gh.Ptr("https://gist.github.com/user/gist123"),
 	}
 
 	t.Run("ListGists sanitizes description", func(t *testing.T) {
