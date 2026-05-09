@@ -98,7 +98,7 @@ func ListGists(t translations.TranslationHelperFunc) inventory.ServerTool {
 			// Sanitize descriptions to prevent XSS
 			for _, gist := range gists {
 				if gist.Description != nil {
-					gist.Description = github.Ptr(sanitize.Sanitize(*gist.Description))
+					gist.Description = github.String(sanitize.Sanitize(*gist.Description))
 				}
 			}
 
@@ -162,7 +162,7 @@ func GetGist(t translations.TranslationHelperFunc) inventory.ServerTool {
 
 			// Sanitize description to prevent XSS
 			if gist.Description != nil {
-				gist.Description = github.Ptr(sanitize.Sanitize(*gist.Description))
+				gist.Description = github.String(sanitize.Sanitize(*gist.Description))
 			}
 
 			r, err := json.Marshal(gist)

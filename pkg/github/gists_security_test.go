@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/github/github-mcp-server/pkg/translations"
-	"github.com/google/go-github/v79/github"
+	gh "github.com/google/go-github/v79/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,19 +16,19 @@ func Test_GistsSanitization(t *testing.T) {
 	maliciousDescription := "Gist with <script>alert('xss')</script> description"
 	expectedDescription := "Gist with  description"
 
-	mockGist := &github.Gist{
-		ID:          github.Ptr("gist123"),
-		Description: github.Ptr(maliciousDescription),
-		HTMLURL:     github.Ptr("https://gist.github.com/user/gist123"),
+	mockGist := &gh.Gist{
+		ID:          gh.String("gist123"),
+		Description: gh.String(maliciousDescription),
+		HTMLURL:     gh.String("https://gist.github.com/user/gist123"),
 	}
 
 	t.Run("ListGists sanitizes description", func(t *testing.T) {
 		mockClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-			GetGists: mockResponse(t, http.StatusOK, []*github.Gist{mockGist}),
+			GetGists: mockResponse(t, http.StatusOK, []*gh.Gist{mockGist}),
 		})
 
 		serverTool := ListGists(translations.NullTranslationHelper)
-		deps := BaseDeps{Client: github.NewClient(mockClient)}
+		deps := BaseDeps{Client: gh.NewClient(mockClient)}
 		handler := serverTool.Handler(deps)
 
 		request := createMCPRequest(map[string]interface{}{})
@@ -37,7 +37,7 @@ func Test_GistsSanitization(t *testing.T) {
 		require.False(t, result.IsError)
 
 		textContent := getTextResult(t, result)
-		var returnedGists []*github.Gist
+		var returnedGists []*gh.Gist
 		err = json.Unmarshal([]byte(textContent.Text), &returnedGists)
 		require.NoError(t, err)
 
@@ -50,7 +50,7 @@ func Test_GistsSanitization(t *testing.T) {
 		})
 
 		serverTool := GetGist(translations.NullTranslationHelper)
-		deps := BaseDeps{Client: github.NewClient(mockClient)}
+		deps := BaseDeps{Client: gh.NewClient(mockClient)}
 		handler := serverTool.Handler(deps)
 
 		request := createMCPRequest(map[string]interface{}{"gist_id": "gist123"})
@@ -59,7 +59,7 @@ func Test_GistsSanitization(t *testing.T) {
 		require.False(t, result.IsError)
 
 		textContent := getTextResult(t, result)
-		var returnedGist github.Gist
+		var returnedGist gh.Gist
 		err = json.Unmarshal([]byte(textContent.Text), &returnedGist)
 		require.NoError(t, err)
 
