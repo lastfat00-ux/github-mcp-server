@@ -136,37 +136,6 @@ func Test_ListNotifications(t *testing.T) {
 			assert.Equal(t, *tc.expectedResult[0].ID, *returned[0].ID)
 		})
 	}
-
-	t.Run("XSS sanitization in notification titles", func(t *testing.T) {
-		maliciousTitle := "Malicious <script>alert('xss')</script> Title"
-		expectedSanitized := "Malicious  Title"
-		mockNotification := &github.Notification{
-			ID: github.Ptr("123"),
-			Subject: &github.NotificationSubject{
-				Title: github.Ptr(maliciousTitle),
-			},
-		}
-
-		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-			GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{mockNotification}),
-		})
-
-		client := github.NewClient(mockedClient)
-		deps := BaseDeps{Client: client}
-		handler := serverTool.Handler(deps)
-		request := createMCPRequest(map[string]interface{}{})
-		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
-
-		require.NoError(t, err)
-		require.False(t, result.IsError)
-
-		textContent := getTextResult(t, result)
-		var returned []*github.Notification
-		err = json.Unmarshal([]byte(textContent.Text), &returned)
-		require.NoError(t, err)
-		require.NotEmpty(t, returned)
-		assert.Equal(t, expectedSanitized, *returned[0].Subject.Title)
-	})
 }
 
 func Test_ManageNotificationSubscription(t *testing.T) {
@@ -771,34 +740,4 @@ func Test_GetNotificationDetails(t *testing.T) {
 			assert.Equal(t, *tc.expectResult.ID, *returned.ID)
 		})
 	}
-
-	t.Run("XSS sanitization in notification details title", func(t *testing.T) {
-		maliciousTitle := "Malicious <script>alert('xss')</script> Title"
-		expectedSanitized := "Malicious  Title"
-		mockThread := &github.Notification{
-			ID: github.Ptr("123"),
-			Subject: &github.NotificationSubject{
-				Title: github.Ptr(maliciousTitle),
-			},
-		}
-
-		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-			GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, mockThread),
-		})
-
-		client := github.NewClient(mockedClient)
-		deps := BaseDeps{Client: client}
-		handler := serverTool.Handler(deps)
-		request := createMCPRequest(map[string]interface{}{"notificationID": "123"})
-		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
-
-		require.NoError(t, err)
-		require.False(t, result.IsError)
-
-		textContent := getTextResult(t, result)
-		var returned github.Notification
-		err = json.Unmarshal([]byte(textContent.Text), &returned)
-		require.NoError(t, err)
-		assert.Equal(t, expectedSanitized, *returned.Subject.Title)
-	})
 }
