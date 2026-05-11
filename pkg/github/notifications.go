@@ -11,6 +11,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -149,6 +150,12 @@ func ListNotifications(t translations.TranslationHelperFunc) inventory.ServerToo
 					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, nil
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get notifications", resp, body), nil, nil
+			}
+
+			for _, n := range notifications {
+				if n.Subject != nil && n.Subject.Title != nil {
+					n.Subject.Title = github.Ptr(sanitize.Sanitize(*n.Subject.Title))
+				}
 			}
 
 			// Marshal response to JSON
@@ -386,6 +393,10 @@ func GetNotificationDetails(t translations.TranslationHelperFunc) inventory.Serv
 					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, nil
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get notification details", resp, body), nil, nil
+			}
+
+			if thread.Subject != nil && thread.Subject.Title != nil {
+				thread.Subject.Title = github.Ptr(sanitize.Sanitize(*thread.Subject.Title))
 			}
 
 			r, err := json.Marshal(thread)
