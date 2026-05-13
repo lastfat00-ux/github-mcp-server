@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/google/jsonschema-go/jsonschema"
 	"context"
 	"fmt"
 	"net/url"
@@ -12,6 +11,7 @@ import (
 	"github.com/github/github-mcp-server/pkg/github"
 	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/translations"
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/spf13/cobra"
 )
 
