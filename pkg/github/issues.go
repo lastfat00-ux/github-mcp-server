@@ -209,9 +209,9 @@ func fragmentToIssue(fragment IssueFragment) *github.Issue {
 	var foundLabels []*github.Label
 	for _, labelNode := range fragment.Labels.Nodes {
 		foundLabels = append(foundLabels, &github.Label{
-			Name:        github.Ptr(string(labelNode.Name)),
+			Name:        github.Ptr(sanitize.Sanitize(string(labelNode.Name))),
 			NodeID:      github.Ptr(string(labelNode.ID)),
-			Description: github.Ptr(string(labelNode.Description)),
+			Description: github.Ptr(sanitize.Sanitize(string(labelNode.Description))),
 		})
 	}
 
@@ -228,6 +228,17 @@ func fragmentToIssue(fragment IssueFragment) *github.Issue {
 		Body:     github.Ptr(sanitize.Sanitize(string(fragment.Body))),
 		Labels:   foundLabels,
 		Comments: github.Ptr(int(fragment.Comments.TotalCount)),
+	}
+}
+
+func sanitizeIssueLabels(labels []*github.Label) {
+	for _, label := range labels {
+		if label.Name != nil {
+			label.Name = github.Ptr(sanitize.Sanitize(*label.Name))
+		}
+		if label.Description != nil {
+			label.Description = github.Ptr(sanitize.Sanitize(*label.Description))
+		}
 	}
 }
 
@@ -360,7 +371,7 @@ func GetIssue(ctx context.Context, client *github.Client, cache *lockdown.RepoAc
 		}
 	}
 
-	// Sanitize title/body on response
+	// Sanitize title/body/labels on response
 	if issue != nil {
 		if issue.Title != nil {
 			issue.Title = github.Ptr(sanitize.Sanitize(*issue.Title))
@@ -368,6 +379,7 @@ func GetIssue(ctx context.Context, client *github.Client, cache *lockdown.RepoAc
 		if issue.Body != nil {
 			issue.Body = github.Ptr(sanitize.Sanitize(*issue.Body))
 		}
+		sanitizeIssueLabels(issue.Labels)
 	}
 
 	r, err := json.Marshal(issue)
@@ -525,9 +537,9 @@ func GetIssueLabels(ctx context.Context, client *githubv4.Client, owner string, 
 	for i, label := range query.Repository.Issue.Labels.Nodes {
 		issueLabels[i] = map[string]any{
 			"id":          fmt.Sprintf("%v", label.ID),
-			"name":        string(label.Name),
+			"name":        sanitize.Sanitize(string(label.Name)),
 			"color":       string(label.Color),
-			"description": string(label.Description),
+			"description": sanitize.Sanitize(string(label.Description)),
 		}
 	}
 
