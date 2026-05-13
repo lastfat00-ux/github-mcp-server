@@ -1,6 +1,7 @@
 package github
 
 import (
+	"github.com/google/jsonschema-go/jsonschema"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"github.com/github/github-mcp-server/internal/toolsnaps"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/google/go-github/v79/github"
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
