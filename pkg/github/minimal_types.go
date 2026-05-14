@@ -1,6 +1,7 @@
 package github
 
 import (
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/google/go-github/v79/github"
 )
 
@@ -145,15 +146,15 @@ func convertToMinimalProject(fullProject *github.ProjectV2) *MinimalProject {
 		NodeID:           github.Ptr(fullProject.GetNodeID()),
 		Owner:            convertToMinimalUser(fullProject.GetOwner()),
 		Creator:          convertToMinimalUser(fullProject.GetCreator()),
-		Title:            github.Ptr(fullProject.GetTitle()),
-		Description:      github.Ptr(fullProject.GetDescription()),
+		Title:            github.Ptr(sanitize.Sanitize(fullProject.GetTitle())),
+		Description:      github.Ptr(sanitize.Sanitize(fullProject.GetDescription())),
 		Public:           github.Ptr(fullProject.GetPublic()),
 		ClosedAt:         github.Ptr(fullProject.GetClosedAt()),
 		CreatedAt:        github.Ptr(fullProject.GetCreatedAt()),
 		UpdatedAt:        github.Ptr(fullProject.GetUpdatedAt()),
 		DeletedAt:        github.Ptr(fullProject.GetDeletedAt()),
 		Number:           github.Ptr(fullProject.GetNumber()),
-		ShortDescription: github.Ptr(fullProject.GetShortDescription()),
+		ShortDescription: github.Ptr(sanitize.Sanitize(fullProject.GetShortDescription())),
 		DeletedBy:        convertToMinimalUser(fullProject.GetDeletedBy()),
 	}
 }
