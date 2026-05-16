@@ -9,6 +9,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -108,6 +109,12 @@ func SearchRepositories(t translations.TranslationHelperFunc) inventory.ServerTo
 					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, nil
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to search repositories", resp, body), nil, nil
+			}
+
+			for _, repo := range result.Repositories {
+				if repo.Description != nil {
+					repo.Description = github.Ptr(sanitize.Sanitize(*repo.Description))
+				}
 			}
 
 			// Return either minimal or full response based on parameter
@@ -251,6 +258,15 @@ func SearchCode(t translations.TranslationHelperFunc) inventory.ServerTool {
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to search code", resp, body), nil, nil
 			}
 
+			for _, code := range result.CodeResults {
+				if code.Name != nil {
+					code.Name = github.Ptr(sanitize.Sanitize(*code.Name))
+				}
+				if code.Path != nil {
+					code.Path = github.Ptr(sanitize.Sanitize(*code.Path))
+				}
+			}
+
 			r, err := json.Marshal(result)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal response", err), nil, nil
@@ -320,7 +336,7 @@ func userOrOrgHandler(ctx context.Context, accountType string, deps ToolDependen
 	for _, user := range result.Users {
 		if user.Login != nil {
 			mu := MinimalUser{
-				Login:      user.GetLogin(),
+				Login:      sanitize.Sanitize(user.GetLogin()),
 				ID:         user.GetID(),
 				ProfileURL: user.GetHTMLURL(),
 				AvatarURL:  user.GetAvatarURL(),
