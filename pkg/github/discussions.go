@@ -107,7 +107,7 @@ func fragmentToDiscussion(fragment NodeFragment) *github.Discussion {
 			Login: github.Ptr(string(fragment.Author.Login)),
 		},
 		DiscussionCategory: &github.DiscussionCategory{
-			Name: github.Ptr(string(fragment.Category.Name)),
+			Name: github.Ptr(sanitize.Sanitize(string(fragment.Category.Name))),
 		},
 	}
 }
@@ -248,9 +248,27 @@ func ListDiscussions(t translations.TranslationHelperFunc) inventory.ServerTool 
 			var discussions []*github.Discussion
 			var pageInfo PageInfoFragment
 			var totalCount githubv4.Int
+			featureFlags := deps.GetFlags()
+			cache := deps.GetRepoAccessCache()
+
 			if queryResult, ok := discussionQuery.(DiscussionQueryResult); ok {
 				fragment := queryResult.GetDiscussionFragment()
 				for _, node := range fragment.Nodes {
+					if featureFlags.LockdownMode {
+						if cache == nil {
+							return nil, nil, fmt.Errorf("lockdown cache is not configured")
+						}
+						login := string(node.Author.Login)
+						if login != "" {
+							isSafeContent, err := cache.IsSafeContent(ctx, login, owner, repo)
+							if err != nil {
+								return utils.NewToolResultError(fmt.Sprintf("failed to check lockdown mode: %v", err)), nil, nil
+							}
+							if !isSafeContent {
+								continue
+							}
+						}
+					}
 					discussions = append(discussions, fragmentToDiscussion(node))
 				}
 				pageInfo = fragment.PageInfo
@@ -334,7 +352,10 @@ func GetDiscussion(t translations.TranslationHelperFunc) inventory.ServerTool {
 						IsAnswered     githubv4.Boolean
 						AnswerChosenAt *githubv4.DateTime
 						URL            githubv4.String `graphql:"url"`
-						Category       struct {
+						Author         struct {
+							Login githubv4.String
+						}
+						Category struct {
 							Name githubv4.String
 						} `graphql:"category"`
 					} `graphql:"discussion(number: $discussionNumber)"`
@@ -350,6 +371,24 @@ func GetDiscussion(t translations.TranslationHelperFunc) inventory.ServerTool {
 			}
 			d := q.Repository.Discussion
 
+			featureFlags := deps.GetFlags()
+			if featureFlags.LockdownMode {
+				cache := deps.GetRepoAccessCache()
+				if cache == nil {
+					return nil, nil, fmt.Errorf("lockdown cache is not configured")
+				}
+				login := string(d.Author.Login)
+				if login != "" {
+					isSafeContent, err := cache.IsSafeContent(ctx, login, params.Owner, params.Repo)
+					if err != nil {
+						return utils.NewToolResultError(fmt.Sprintf("failed to check lockdown mode: %v", err)), nil, nil
+					}
+					if !isSafeContent {
+						return utils.NewToolResultError("access to discussion details is restricted by lockdown mode"), nil, nil
+					}
+				}
+			}
+
 			// Build response as map to include fields not present in go-github's Discussion struct.
 			// The go-github library's Discussion type lacks isAnswered and answerChosenAt fields,
 			// so we use map[string]interface{} for the response (consistent with other functions
@@ -364,7 +403,7 @@ func GetDiscussion(t translations.TranslationHelperFunc) inventory.ServerTool {
 				"isAnswered": bool(d.IsAnswered),
 				"createdAt":  d.CreatedAt.Time,
 				"category": map[string]interface{}{
-					"name": string(d.Category.Name),
+					"name": sanitize.Sanitize(string(d.Category.Name)),
 				},
 			}
 
@@ -455,7 +494,10 @@ func GetDiscussionComments(t translations.TranslationHelperFunc) inventory.Serve
 					Discussion struct {
 						Comments struct {
 							Nodes []struct {
-								Body githubv4.String
+								Body   githubv4.String
+								Author struct {
+									Login githubv4.String
+								}
 							}
 							PageInfo struct {
 								HasNextPage     githubv4.Boolean
@@ -483,8 +525,26 @@ func GetDiscussionComments(t translations.TranslationHelperFunc) inventory.Serve
 				return utils.NewToolResultError(err.Error()), nil, nil
 			}
 
+			featureFlags := deps.GetFlags()
+			cache := deps.GetRepoAccessCache()
+
 			var comments []*github.IssueComment
 			for _, c := range q.Repository.Discussion.Comments.Nodes {
+				if featureFlags.LockdownMode {
+					if cache == nil {
+						return nil, nil, fmt.Errorf("lockdown cache is not configured")
+					}
+					login := string(c.Author.Login)
+					if login != "" {
+						isSafeContent, err := cache.IsSafeContent(ctx, login, params.Owner, params.Repo)
+						if err != nil {
+							return utils.NewToolResultError(fmt.Sprintf("failed to check lockdown mode: %v", err)), nil, nil
+						}
+						if !isSafeContent {
+							continue
+						}
+					}
+				}
 				// Sanitize comment body to prevent XSS from untrusted user content
 				comments = append(comments, &github.IssueComment{Body: github.Ptr(sanitize.Sanitize(string(c.Body)))})
 			}
@@ -587,7 +647,7 @@ func ListDiscussionCategories(t translations.TranslationHelperFunc) inventory.Se
 			for _, c := range q.Repository.DiscussionCategories.Nodes {
 				categories = append(categories, map[string]string{
 					"id":   fmt.Sprint(c.ID),
-					"name": string(c.Name),
+					"name": sanitize.Sanitize(string(c.Name)),
 				})
 			}
 
