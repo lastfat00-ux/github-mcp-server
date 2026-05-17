@@ -496,7 +496,7 @@ func Test_ListDiscussions(t *testing.T) {
 func Test_DiscussionSanitization(t *testing.T) {
 	t.Run("GetDiscussion sanitization", func(t *testing.T) {
 		toolDef := GetDiscussion(translations.NullTranslationHelper)
-		qGetDiscussion := "query($discussionNumber:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){number,title,body,createdAt,closed,isAnswered,answerChosenAt,url,category{name}}}}"
+		qGetDiscussion := "query($discussionNumber:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){number,title,body,createdAt,closed,isAnswered,answerChosenAt,url,author{login},category{name}}}}"
 		vars := map[string]interface{}{
 			"owner":            "owner",
 			"repo":             "repo",
@@ -512,6 +512,7 @@ func Test_DiscussionSanitization(t *testing.T) {
 				"createdAt":  "2025-04-25T12:00:00Z",
 				"closed":     false,
 				"isAnswered": false,
+				"author":     map[string]any{"login": "author"},
 				"category":   map[string]any{"name": "General"},
 			}},
 		})
@@ -537,7 +538,7 @@ func Test_DiscussionSanitization(t *testing.T) {
 
 	t.Run("GetDiscussionComments sanitization", func(t *testing.T) {
 		toolDef := GetDiscussionComments(translations.NullTranslationHelper)
-		qGetComments := "query($after:String$discussionNumber:Int!$first:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){comments(first: $first, after: $after){nodes{body},pageInfo{hasNextPage,hasPreviousPage,startCursor,endCursor},totalCount}}}}"
+		qGetComments := "query($after:String$discussionNumber:Int!$first:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){comments(first: $first, after: $after){nodes{body,author{login}},pageInfo{hasNextPage,hasPreviousPage,startCursor,endCursor},totalCount}}}}"
 		vars := map[string]interface{}{
 			"owner":            "owner",
 			"repo":             "repo",
@@ -551,7 +552,7 @@ func Test_DiscussionSanitization(t *testing.T) {
 				"discussion": map[string]any{
 					"comments": map[string]any{
 						"nodes": []map[string]any{
-							{"body": "Malicious <script>alert('xss')</script> Comment"},
+							{"body": "Malicious <script>alert('xss')</script> Comment", "author": map[string]any{"login": "author"}},
 						},
 						"pageInfo": map[string]any{
 							"hasNextPage":     false,
@@ -603,7 +604,7 @@ func Test_GetDiscussion(t *testing.T) {
 	assert.ElementsMatch(t, schema.Required, []string{"owner", "repo", "discussionNumber"})
 
 	// Use exact string query that matches implementation output
-	qGetDiscussion := "query($discussionNumber:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){number,title,body,createdAt,closed,isAnswered,answerChosenAt,url,category{name}}}}"
+	qGetDiscussion := "query($discussionNumber:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){number,title,body,createdAt,closed,isAnswered,answerChosenAt,url,author{login},category{name}}}}"
 
 	vars := map[string]interface{}{
 		"owner":            "owner",
@@ -628,6 +629,7 @@ func Test_GetDiscussion(t *testing.T) {
 					"createdAt":  "2025-04-25T12:00:00Z",
 					"closed":     false,
 					"isAnswered": false,
+					"author":     map[string]any{"login": "author"},
 					"category":   map[string]any{"name": "General"},
 				}},
 			}),
@@ -700,7 +702,7 @@ func Test_GetDiscussionComments(t *testing.T) {
 	assert.ElementsMatch(t, schema.Required, []string{"owner", "repo", "discussionNumber"})
 
 	// Use exact string query that matches implementation output
-	qGetComments := "query($after:String$discussionNumber:Int!$first:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){comments(first: $first, after: $after){nodes{body},pageInfo{hasNextPage,hasPreviousPage,startCursor,endCursor},totalCount}}}}"
+	qGetComments := "query($after:String$discussionNumber:Int!$first:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){comments(first: $first, after: $after){nodes{body,author{login}},pageInfo{hasNextPage,hasPreviousPage,startCursor,endCursor},totalCount}}}}"
 
 	// Variables matching what GraphQL receives after JSON marshaling/unmarshaling
 	vars := map[string]interface{}{
@@ -716,8 +718,8 @@ func Test_GetDiscussionComments(t *testing.T) {
 			"discussion": map[string]any{
 				"comments": map[string]any{
 					"nodes": []map[string]any{
-						{"body": "This is the first comment"},
-						{"body": "This is the second comment"},
+						{"body": "This is the first comment", "author": map[string]any{"login": "author"}},
+						{"body": "This is the second comment", "author": map[string]any{"login": "author"}},
 					},
 					"pageInfo": map[string]any{
 						"hasNextPage":     false,
