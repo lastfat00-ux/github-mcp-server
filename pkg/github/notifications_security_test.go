@@ -45,7 +45,6 @@ func Test_Notifications_Sanitization(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, notifications, 1)
 
-		// If we haven't implemented it yet, this should fail.
 		assert.NotContains(t, *notifications[0].Subject.Title, "<script>")
 		assert.Contains(t, *notifications[0].Subject.Title, "Safe")
 	})
