@@ -35,8 +35,9 @@ func Test_ListNotifications(t *testing.T) {
 	// All fields are optional, so Required should be empty
 	assert.Empty(t, schema.Required)
 	mockNotification := &github.Notification{
-		ID:     github.Ptr("123"),
-		Reason: github.Ptr("mention"),
+		ID:      github.Ptr("123"),
+		Reason:  github.Ptr("mention"),
+		Subject: &github.NotificationSubject{Title: github.Ptr("Test Subject")},
 	}
 
 	tests := []struct {
@@ -96,6 +97,18 @@ func Test_ListNotifications(t *testing.T) {
 			expectedResult: []*github.Notification{mockNotification},
 		},
 		{
+			name: "sanitizes subject title",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{{
+					ID: github.Ptr("456"),
+					Subject: &github.NotificationSubject{Title: github.Ptr("<script>alert('xss')</script> Malicious")},
+				}}),
+			}),
+			requestArgs:    map[string]interface{}{},
+			expectError:    false,
+			expectedResult: []*github.Notification{{ID: github.Ptr("456"), Subject: &github.NotificationSubject{Title: github.Ptr(" Malicious")}}},
+		},
+		{
 			name: "error",
 			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
 				GetNotifications: mockResponse(t, http.StatusInternalServerError, `{"message": "error"}`),
@@ -134,6 +147,9 @@ func Test_ListNotifications(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, returned)
 			assert.Equal(t, *tc.expectedResult[0].ID, *returned[0].ID)
+			if tc.expectedResult[0].Subject != nil {
+				assert.Equal(t, *tc.expectedResult[0].Subject.Title, *returned[0].Subject.Title)
+			}
 		})
 	}
 }
@@ -740,4 +756,23 @@ func Test_GetNotificationDetails(t *testing.T) {
 			assert.Equal(t, *tc.expectResult.ID, *returned.ID)
 		})
 	}
+
+	t.Run("sanitizes subject title", func(t *testing.T) {
+		mockNotification := &github.Notification{
+			ID: github.Ptr("123"),
+			Subject: &github.NotificationSubject{Title: github.Ptr("<script>alert('xss')</script> Malicious")},
+		}
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, mockNotification),
+		})
+		deps := BaseDeps{Client: github.NewClient(mockedClient)}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{"notificationID": "123"})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		var returned github.Notification
+		err = json.Unmarshal([]byte(getTextResult(t, result).Text), &returned)
+		require.NoError(t, err)
+		assert.Equal(t, " Malicious", *returned.Subject.Title)
+	})
 }
