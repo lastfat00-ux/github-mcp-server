@@ -2,6 +2,8 @@ module github.com/github/github-mcp-server
 
 go 1.24.0
 
+toolchain go1.24.3
+
 require (
 	github.com/google/go-github/v79 v79.0.0
 	github.com/google/jsonschema-go v0.4.2
