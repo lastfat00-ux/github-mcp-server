@@ -14,6 +14,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var mockMaliciousNotification = &github.Notification{
+	ID:     github.Ptr("456"),
+	Reason: github.Ptr("mention"),
+	Subject: &github.NotificationSubject{
+		Title: github.Ptr("Malicious <script>alert('XSS')</script><b>Title</b>"),
+	},
+}
+
 func Test_ListNotifications(t *testing.T) {
 	// Verify tool definition and schema
 	serverTool := ListNotifications(translations.NullTranslationHelper)
@@ -37,6 +45,9 @@ func Test_ListNotifications(t *testing.T) {
 	mockNotification := &github.Notification{
 		ID:     github.Ptr("123"),
 		Reason: github.Ptr("mention"),
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr("Normal Title"),
+		},
 	}
 
 	tests := []struct {
@@ -96,6 +107,15 @@ func Test_ListNotifications(t *testing.T) {
 			expectedResult: []*github.Notification{mockNotification},
 		},
 		{
+			name: "success with sanitization",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{mockMaliciousNotification}),
+			}),
+			requestArgs:    map[string]interface{}{},
+			expectError:    false,
+			expectedResult: []*github.Notification{mockMaliciousNotification},
+		},
+		{
 			name: "error",
 			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
 				GetNotifications: mockResponse(t, http.StatusInternalServerError, `{"message": "error"}`),
@@ -134,6 +154,10 @@ func Test_ListNotifications(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, returned)
 			assert.Equal(t, *tc.expectedResult[0].ID, *returned[0].ID)
+
+			if tc.name == "success with sanitization" {
+				assert.Equal(t, "Malicious <b>Title</b>", *returned[0].Subject.Title)
+			}
 		})
 	}
 }
@@ -699,6 +723,17 @@ func Test_GetNotificationDetails(t *testing.T) {
 			expectResult: mockThread,
 		},
 		{
+			name: "success with sanitization",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, mockMaliciousNotification),
+			}),
+			requestArgs: map[string]interface{}{
+				"notificationID": "456",
+			},
+			expectError:  false,
+			expectResult: mockMaliciousNotification,
+		},
+		{
 			name: "not found",
 			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
 				GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusNotFound, `{"message": "not found"}`),
@@ -738,6 +773,10 @@ func Test_GetNotificationDetails(t *testing.T) {
 			err = json.Unmarshal([]byte(textContent.Text), &returned)
 			require.NoError(t, err)
 			assert.Equal(t, *tc.expectResult.ID, *returned.ID)
+
+			if tc.name == "success with sanitization" {
+				assert.Equal(t, "Malicious <b>Title</b>", *returned.Subject.Title)
+			}
 		})
 	}
 }
