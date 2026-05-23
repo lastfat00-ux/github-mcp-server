@@ -31,6 +31,13 @@ issues:
         - staticcheck
         - errcheck
         - gosec
-    - text: "common-false-positives"
-    - text: "legacy"
-    - text: "std-error-handling"
+        - gocritic
+        - revive
+        - bodyclose
+    - path: _test\.go
+      linters:
+        - gosec
+  exclude-dirs:
+    - third-party
+    - builtin
+    - examples
