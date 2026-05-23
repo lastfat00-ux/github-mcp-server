@@ -152,10 +152,9 @@ func ListNotifications(t translations.TranslationHelperFunc) inventory.ServerToo
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get notifications", resp, body), nil, nil
 			}
 
+			// Sanitize notifications to prevent XSS from untrusted user content
 			for _, n := range notifications {
-				if n != nil && n.Subject != nil && n.Subject.Title != nil {
-					n.Subject.Title = github.Ptr(sanitize.Sanitize(*n.Subject.Title))
-				}
+				sanitizeNotification(n)
 			}
 
 			// Marshal response to JSON
@@ -395,9 +394,8 @@ func GetNotificationDetails(t translations.TranslationHelperFunc) inventory.Serv
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get notification details", resp, body), nil, nil
 			}
 
-			if thread != nil && thread.Subject != nil && thread.Subject.Title != nil {
-				thread.Subject.Title = github.Ptr(sanitize.Sanitize(*thread.Subject.Title))
-			}
+			// Sanitize notification to prevent XSS from untrusted user content
+			sanitizeNotification(thread)
 
 			r, err := json.Marshal(thread)
 			if err != nil {
@@ -407,6 +405,13 @@ func GetNotificationDetails(t translations.TranslationHelperFunc) inventory.Serv
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+func sanitizeNotification(n *github.Notification) {
+	if n == nil || n.Subject == nil || n.Subject.Title == nil {
+		return
+	}
+	n.Subject.Title = github.Ptr(sanitize.Sanitize(*n.Subject.Title))
 }
 
 // Enum values for ManageNotificationSubscription action

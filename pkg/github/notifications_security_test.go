@@ -17,6 +17,7 @@ func Test_Notifications_Sanitization(t *testing.T) {
 	req := createMCPRequest(map[string]interface{}{})
 	res, _ := handler(ContextWithDeps(context.Background(), deps), &req)
 	var returned []*github.Notification
-	json.Unmarshal([]byte(getTextResult(t, res).Text), &returned)
+	err := json.Unmarshal([]byte(getTextResult(t, res).Text), &returned)
+	assert.NoError(t, err)
 	assert.Equal(t, "Malicious <b>Title</b>", *returned[0].Subject.Title)
 }
