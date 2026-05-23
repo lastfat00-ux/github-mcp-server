@@ -37,6 +37,9 @@ func Test_ListNotifications(t *testing.T) {
 	mockNotification := &github.Notification{
 		ID:     github.Ptr("123"),
 		Reason: github.Ptr("mention"),
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr("Malicious <script>alert(1)</script><b>Title</b>"),
+		},
 	}
 
 	tests := []struct {
@@ -134,6 +137,9 @@ func Test_ListNotifications(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, returned)
 			assert.Equal(t, *tc.expectedResult[0].ID, *returned[0].ID)
+			if returned[0].Subject != nil {
+				assert.Equal(t, "Malicious <b>Title</b>", *returned[0].Subject.Title)
+			}
 		})
 	}
 }
@@ -677,7 +683,13 @@ func Test_GetNotificationDetails(t *testing.T) {
 	assert.Contains(t, schema.Properties, "notificationID")
 	assert.Equal(t, []string{"notificationID"}, schema.Required)
 
-	mockThread := &github.Notification{ID: github.Ptr("123"), Reason: github.Ptr("mention")}
+	mockThread := &github.Notification{
+		ID:     github.Ptr("123"),
+		Reason: github.Ptr("mention"),
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr("Malicious <script>alert(1)</script><b>Title</b>"),
+		},
+	}
 
 	tests := []struct {
 		name           string
@@ -738,6 +750,9 @@ func Test_GetNotificationDetails(t *testing.T) {
 			err = json.Unmarshal([]byte(textContent.Text), &returned)
 			require.NoError(t, err)
 			assert.Equal(t, *tc.expectResult.ID, *returned.ID)
+			if returned.Subject != nil {
+				assert.Equal(t, "Malicious <b>Title</b>", *returned.Subject.Title)
+			}
 		})
 	}
 }
