@@ -12,63 +12,39 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_Notifications_Security(t *testing.T) {
-	maliciousTitle := "Hello <script>alert('xss')</script> world"
-	expectedSanitizedTitle := "Hello  world"
+func TestNotificationsSecurity(t *testing.T) {
+	malicious := "Hello <script>alert('xss')</script> world"
+	expected := "Hello  world"
+	mock := &github.Notification{ID: github.Ptr("123"), Subject: &github.NotificationSubject{Title: github.Ptr(malicious)}}
 
-	mockNotification := &github.Notification{
-		ID: github.Ptr("123"),
-		Subject: &github.NotificationSubject{
-			Title: github.Ptr(maliciousTitle),
-		},
-	}
+	client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetNotifications:                  mockResponse(t, 200, []*github.Notification{mock}),
+		GetNotificationsThreadsByThreadID: mockResponse(t, 200, mock),
+	}))
+	deps := BaseDeps{Client: client}
+	ctx := ContextWithDeps(context.Background(), deps)
 
-	t.Run("list_notifications sanitizes subject title", func(t *testing.T) {
-		serverTool := ListNotifications(translations.NullTranslationHelper)
-		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-			GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{mockNotification}),
-		})
-		client := github.NewClient(mockedClient)
-		deps := BaseDeps{
-			Client: client,
-		}
-		handler := serverTool.Handler(deps)
-		request := createMCPRequest(map[string]interface{}{})
-		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
-
+	t.Run("list_notifications", func(t *testing.T) {
+		tool := ListNotifications(translations.NullTranslationHelper)
+		handler := tool.Handler(deps)
+		req := createMCPRequest(map[string]any{})
+		res, err := handler(ctx, &req)
 		require.NoError(t, err)
-		require.False(t, result.IsError)
-		textContent := getTextResult(t, result)
-
-		var returned []*github.Notification
-		err = json.Unmarshal([]byte(textContent.Text), &returned)
+		var list []*github.Notification
+		err = json.Unmarshal([]byte(getTextResult(t, res).Text), &list)
 		require.NoError(t, err)
-		require.NotEmpty(t, returned)
-		assert.Equal(t, expectedSanitizedTitle, *returned[0].Subject.Title)
+		assert.Equal(t, expected, *list[0].Subject.Title)
 	})
 
-	t.Run("get_notification_details sanitizes subject title", func(t *testing.T) {
-		serverTool := GetNotificationDetails(translations.NullTranslationHelper)
-		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-			GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, mockNotification),
-		})
-		client := github.NewClient(mockedClient)
-		deps := BaseDeps{
-			Client: client,
-		}
-		handler := serverTool.Handler(deps)
-		request := createMCPRequest(map[string]interface{}{
-			"notificationID": "123",
-		})
-		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
-
+	t.Run("get_notification_details", func(t *testing.T) {
+		tool := GetNotificationDetails(translations.NullTranslationHelper)
+		handler := tool.Handler(deps)
+		req := createMCPRequest(map[string]any{"notificationID": "123"})
+		res, err := handler(ctx, &req)
 		require.NoError(t, err)
-		require.False(t, result.IsError)
-		textContent := getTextResult(t, result)
-
-		var returned github.Notification
-		err = json.Unmarshal([]byte(textContent.Text), &returned)
+		var detail github.Notification
+		err = json.Unmarshal([]byte(getTextResult(t, res).Text), &detail)
 		require.NoError(t, err)
-		assert.Equal(t, expectedSanitizedTitle, *returned.Subject.Title)
+		assert.Equal(t, expected, *detail.Subject.Title)
 	})
 }
