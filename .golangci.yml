@@ -1,6 +1,5 @@
 run:
-  concurrency: 4
-  tests: true
+  timeout: 5m
 
 linters:
   enable:
@@ -18,8 +17,9 @@ linters:
     - unused
 
 issues:
+  exclude-use-default: true
   exclude-rules:
-    - path: (third_party$|builtin$|examples$)
+    - path: (third_party|builtin|examples)
       linters:
         - staticcheck
         - govet
