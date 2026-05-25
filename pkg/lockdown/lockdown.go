@@ -74,6 +74,24 @@ func WithCacheName(name string) RepoAccessOption {
 	}
 }
 
+// NewRepoAccessCache creates a new instance of RepoAccessCache.
+func NewRepoAccessCache(client *githubv4.Client, opts ...RepoAccessOption) *RepoAccessCache {
+	c := &RepoAccessCache{
+		client: client,
+		cache:  cache2go.Cache(defaultRepoAccessCacheKey),
+		ttl:    defaultRepoAccessTTL,
+		trustedBotLogins: map[string]struct{}{
+			"copilot": {},
+		},
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(c)
+		}
+	}
+	return c
+}
+
 // GetInstance returns the singleton instance of RepoAccessCache.
 // It initializes the instance on first call with the provided client and options.
 // Subsequent calls ignore the client and options parameters and return the existing instance.
@@ -82,19 +100,7 @@ func GetInstance(client *githubv4.Client, opts ...RepoAccessOption) *RepoAccessC
 	instanceMu.Lock()
 	defer instanceMu.Unlock()
 	if instance == nil {
-		instance = &RepoAccessCache{
-			client: client,
-			cache:  cache2go.Cache(defaultRepoAccessCacheKey),
-			ttl:    defaultRepoAccessTTL,
-			trustedBotLogins: map[string]struct{}{
-				"copilot": {},
-			},
-		}
-		for _, opt := range opts {
-			if opt != nil {
-				opt(instance)
-			}
-		}
+		instance = NewRepoAccessCache(client, opts...)
 	}
 	return instance
 }
