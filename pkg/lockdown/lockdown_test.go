@@ -1,6 +1,7 @@
 package lockdown
 
 import (
+	"fmt"
 	"net/http"
 	"sync"
 	"testing"
@@ -89,20 +90,22 @@ func newMockRepoAccessCache(t *testing.T, ttl time.Duration) (*RepoAccessCache, 
 
 	gqlClient := githubv4.NewClient(httpClient)
 
-	return GetInstance(gqlClient, WithTTL(ttl)), counting
+	cacheName := fmt.Sprintf("repo-access-cache-test-%s-%d", t.Name(), time.Now().UnixNano())
+	return NewRepoAccessCache(gqlClient, WithTTL(ttl), WithCacheName(cacheName)), counting
 }
 
 func TestRepoAccessCacheEvictsAfterTTL(t *testing.T) {
 	ctx := t.Context()
 
-	cache, transport := newMockRepoAccessCache(t, 5*time.Millisecond)
+	cache, transport := newMockRepoAccessCache(t, 100*time.Millisecond)
 	info, err := cache.getRepoAccessInfo(ctx, testUser, testOwner, testRepo)
 	require.NoError(t, err)
 	require.Equal(t, testUser, info.ViewerLogin)
 	require.True(t, info.HasPushAccess)
 	require.EqualValues(t, 1, transport.CallCount())
 
-	time.Sleep(20 * time.Millisecond)
+	// Wait for TTL to definitely expire
+	time.Sleep(200 * time.Millisecond)
 
 	info, err = cache.getRepoAccessInfo(ctx, testUser, testOwner, testRepo)
 	require.NoError(t, err)
