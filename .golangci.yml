@@ -40,3 +40,6 @@ issues:
         - nakedret
         - ineffassign
         - unused
+    - path: _test\.go
+      linters:
+        - gosec
