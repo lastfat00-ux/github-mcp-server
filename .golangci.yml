@@ -26,4 +26,17 @@ linters-settings:
 
 issues:
   exclude-rules:
-    - path: (third_party|builtin|examples)
+    - path: (third-party|builtin|examples)
+      linters:
+        - staticcheck
+        - gosec
+        - errcheck
+        - govet
+        - revive
+        - gocritic
+        - misspell
+        - bodyclose
+        - makezero
+        - nakedret
+        - ineffassign
+        - unused
