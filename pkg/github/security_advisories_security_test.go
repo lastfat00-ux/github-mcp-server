@@ -11,6 +11,7 @@ import (
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/google/go-github/v79/github"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSecurityAdvisoriesSanitization(t *testing.T) {
@@ -26,14 +27,15 @@ func TestSecurityAdvisoriesSanitization(t *testing.T) {
 	expectedSanitized := "Advisory with  and <b>bold</b> text"
 
 	t.Run("GetGlobalSecurityAdvisory sanitizes fields", func(t *testing.T) {
-		mux.HandleFunc("/advisories/GHSA-1234", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/advisories/GHSA-1234", func(w http.ResponseWriter, _ *http.Request) {
 			advisory := &github.GlobalSecurityAdvisory{
 				SecurityAdvisory: github.SecurityAdvisory{
 					Summary:     github.Ptr(maliciousPayload),
 					Description: github.Ptr(maliciousPayload),
 				},
 			}
-			json.NewEncoder(w).Encode(advisory)
+			err := json.NewEncoder(w).Encode(advisory)
+			require.NoError(t, err)
 		})
 
 		ctx := context.Background()
@@ -57,7 +59,7 @@ func TestSecurityAdvisoriesSanitization(t *testing.T) {
 	})
 
 	t.Run("ListGlobalSecurityAdvisories sanitizes fields", func(t *testing.T) {
-		mux.HandleFunc("/advisories", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/advisories", func(w http.ResponseWriter, _ *http.Request) {
 			advisories := []*github.GlobalSecurityAdvisory{
 				{
 					SecurityAdvisory: github.SecurityAdvisory{
@@ -66,7 +68,8 @@ func TestSecurityAdvisoriesSanitization(t *testing.T) {
 					},
 				},
 			}
-			json.NewEncoder(w).Encode(advisories)
+			err := json.NewEncoder(w).Encode(advisories)
+			require.NoError(t, err)
 		})
 
 		ctx := context.Background()
@@ -90,14 +93,15 @@ func TestSecurityAdvisoriesSanitization(t *testing.T) {
 	})
 
 	t.Run("ListRepositorySecurityAdvisories sanitizes fields", func(t *testing.T) {
-		mux.HandleFunc("/repos/o/r/security-advisories", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/repos/o/r/security-advisories", func(w http.ResponseWriter, _ *http.Request) {
 			advisories := []*github.SecurityAdvisory{
 				{
 					Summary:     github.Ptr(maliciousPayload),
 					Description: github.Ptr(maliciousPayload),
 				},
 			}
-			json.NewEncoder(w).Encode(advisories)
+			err := json.NewEncoder(w).Encode(advisories)
+			require.NoError(t, err)
 		})
 
 		ctx := context.Background()
