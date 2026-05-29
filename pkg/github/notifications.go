@@ -154,9 +154,7 @@ func ListNotifications(t translations.TranslationHelperFunc) inventory.ServerToo
 
 			// Sanitize notification titles
 			for _, n := range notifications {
-				if n.Subject != nil && n.Subject.Title != nil {
-					n.Subject.Title = github.Ptr(sanitize.Sanitize(*n.Subject.Title))
-				}
+				sanitizeNotification(n)
 			}
 
 			// Marshal response to JSON
@@ -397,9 +395,7 @@ func GetNotificationDetails(t translations.TranslationHelperFunc) inventory.Serv
 			}
 
 			// Sanitize notification title
-			if thread.Subject != nil && thread.Subject.Title != nil {
-				thread.Subject.Title = github.Ptr(sanitize.Sanitize(*thread.Subject.Title))
-			}
+			sanitizeNotification(thread)
 
 			r, err := json.Marshal(thread)
 			if err != nil {
@@ -506,6 +502,12 @@ func ManageNotificationSubscription(t translations.TranslationHelperFunc) invent
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+func sanitizeNotification(n *github.Notification) {
+	if n != nil && n.Subject != nil && n.Subject.Title != nil {
+		n.Subject.Title = github.Ptr(sanitize.Sanitize(*n.Subject.Title))
+	}
 }
 
 const (
