@@ -407,6 +407,12 @@ func GetNotificationDetails(t translations.TranslationHelperFunc) inventory.Serv
 	)
 }
 
+func sanitizeNotification(n *github.Notification) {
+	if n != nil && n.Subject != nil && n.Subject.Title != nil {
+		n.Subject.Title = github.Ptr(sanitize.Sanitize(*n.Subject.Title))
+	}
+}
+
 // Enum values for ManageNotificationSubscription action
 const (
 	NotificationActionIgnore = "ignore"
@@ -502,12 +508,6 @@ func ManageNotificationSubscription(t translations.TranslationHelperFunc) invent
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
-}
-
-func sanitizeNotification(n *github.Notification) {
-	if n != nil && n.Subject != nil && n.Subject.Title != nil {
-		n.Subject.Title = github.Ptr(sanitize.Sanitize(*n.Subject.Title))
-	}
 }
 
 const (
