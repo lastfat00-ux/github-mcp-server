@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/google/go-github/v79 v79.0.0
-	github.com/google/jsonschema-go v0.4.3
+	github.com/google/jsonschema-go v0.4.2
 	github.com/josephburnett/jd/v2 v2.5.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/muesli/cache2go v0.0.0-20221011235721-518229cd8021
