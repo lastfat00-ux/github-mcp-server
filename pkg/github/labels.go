@@ -8,6 +8,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -93,11 +94,13 @@ func GetLabel(t translations.TranslationHelperFunc) inventory.ServerTool {
 				return utils.NewToolResultError(fmt.Sprintf("label '%s' not found in %s/%s", name, owner, repo)), nil, nil
 			}
 
+			// Note: We sanitize 'name' here despite it being an identifier to prevent XSS from untrusted GitHub content.
+			// This follows the project's security pattern for all user-generated content fetched from GitHub.
 			label := map[string]any{
 				"id":          fmt.Sprintf("%v", query.Repository.Label.ID),
-				"name":        string(query.Repository.Label.Name),
+				"name":        sanitize.Sanitize(string(query.Repository.Label.Name)),
 				"color":       string(query.Repository.Label.Color),
-				"description": string(query.Repository.Label.Description),
+				"description": sanitize.Sanitize(string(query.Repository.Label.Description)),
 			}
 
 			out, err := json.Marshal(label)
@@ -188,9 +191,9 @@ func ListLabels(t translations.TranslationHelperFunc) inventory.ServerTool {
 			for i, labelNode := range query.Repository.Labels.Nodes {
 				labels[i] = map[string]any{
 					"id":          fmt.Sprintf("%v", labelNode.ID),
-					"name":        string(labelNode.Name),
+					"name":        sanitize.Sanitize(string(labelNode.Name)),
 					"color":       string(labelNode.Color),
-					"description": string(labelNode.Description),
+					"description": sanitize.Sanitize(string(labelNode.Description)),
 				}
 			}
 
@@ -326,7 +329,7 @@ func LabelWrite(t translations.TranslationHelperFunc) inventory.ServerTool {
 					return ghErrors.NewGitHubGraphQLErrorResponse(ctx, "Failed to create label", err), nil, nil
 				}
 
-				return utils.NewToolResultText(fmt.Sprintf("label '%s' created successfully", mutation.CreateLabel.Label.Name)), nil, nil
+				return utils.NewToolResultText(fmt.Sprintf("label '%s' created successfully", sanitize.Sanitize(string(mutation.CreateLabel.Label.Name)))), nil, nil
 
 			case "update":
 				// Validate required params for update
@@ -369,7 +372,7 @@ func LabelWrite(t translations.TranslationHelperFunc) inventory.ServerTool {
 					return ghErrors.NewGitHubGraphQLErrorResponse(ctx, "Failed to update label", err), nil, nil
 				}
 
-				return utils.NewToolResultText(fmt.Sprintf("label '%s' updated successfully", mutation.UpdateLabel.Label.Name)), nil, nil
+				return utils.NewToolResultText(fmt.Sprintf("label '%s' updated successfully", sanitize.Sanitize(string(mutation.UpdateLabel.Label.Name)))), nil, nil
 
 			case "delete":
 				// Get the label ID
