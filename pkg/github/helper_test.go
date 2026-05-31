@@ -714,7 +714,7 @@ func (m *multiHandlerTransport) RoundTrip(req *http.Request) (*http.Response, er
 }
 
 // extractPathParams extracts path parameters from a URL path given a pattern
-func extractPathParams(pattern, path string) map[string]string {
+func (m *MockRoundTripper) extractPathParams(pattern, path string) map[string]string {
 	params := make(map[string]string)
 	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
 	pathParts := strings.Split(strings.Trim(path, "/"), "/")
@@ -734,9 +734,9 @@ func extractPathParams(pattern, path string) map[string]string {
 }
 
 // ParseRequestPath is a helper to extract path parameters
-func ParseRequestPath(t *testing.T, req *http.Request, pattern string) url.Values {
+func (m *MockRoundTripper) ParseRequestPath(t *testing.T, req *http.Request, pattern string) url.Values {
 	t.Helper()
-	params := extractPathParams(pattern, req.URL.Path)
+	params := m.extractPathParams(pattern, req.URL.Path)
 	values := url.Values{}
 	for k, v := range params {
 		values.Set(k, v)
