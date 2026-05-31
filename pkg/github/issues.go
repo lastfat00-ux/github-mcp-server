@@ -399,14 +399,6 @@ func GetIssueComments(ctx context.Context, client *github.Client, cache *lockdow
 		}
 		return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get issue comments", resp, body), nil
 	}
-
-	// sanitize comment bodies
-	for _, comment := range comments {
-		if comment != nil && comment.Body != nil {
-			comment.Body = github.Ptr(sanitize.Sanitize(*comment.Body))
-		}
-	}
-
 	if flags.LockdownMode {
 		if cache == nil {
 			return nil, fmt.Errorf("lockdown cache is not configured")

@@ -9,7 +9,6 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
-	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -199,10 +198,6 @@ func ListGlobalSecurityAdvisories(t translations.TranslationHelperFunc) inventor
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list advisories", resp, body), nil, nil
 			}
 
-			for _, a := range advisories {
-				sanitizeGlobalSecurityAdvisory(a)
-			}
-
 			r, err := json.Marshal(advisories)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal advisories: %w", err)
@@ -307,10 +302,6 @@ func ListRepositorySecurityAdvisories(t translations.TranslationHelperFunc) inve
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list repository advisories", resp, body), nil, nil
 			}
 
-			for _, a := range advisories {
-				sanitizeSecurityAdvisory(a)
-			}
-
 			r, err := json.Marshal(advisories)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal advisories: %w", err)
@@ -367,8 +358,6 @@ func GetGlobalSecurityAdvisory(t translations.TranslationHelperFunc) inventory.S
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get advisory", resp, body), nil, nil
 			}
-
-			sanitizeGlobalSecurityAdvisory(advisory)
 
 			r, err := json.Marshal(advisory)
 			if err != nil {
@@ -465,10 +454,6 @@ func ListOrgRepositorySecurityAdvisories(t translations.TranslationHelperFunc) i
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list organization repository advisories", resp, body), nil, nil
 			}
 
-			for _, a := range advisories {
-				sanitizeSecurityAdvisory(a)
-			}
-
 			r, err := json.Marshal(advisories)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal advisories: %w", err)
@@ -477,23 +462,4 @@ func ListOrgRepositorySecurityAdvisories(t translations.TranslationHelperFunc) i
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
-}
-
-func sanitizeSecurityAdvisory(a *github.SecurityAdvisory) {
-	if a == nil {
-		return
-	}
-	if a.Summary != nil {
-		a.Summary = github.Ptr(sanitize.Sanitize(*a.Summary))
-	}
-	if a.Description != nil {
-		a.Description = github.Ptr(sanitize.Sanitize(*a.Description))
-	}
-}
-
-func sanitizeGlobalSecurityAdvisory(a *github.GlobalSecurityAdvisory) {
-	if a == nil {
-		return
-	}
-	sanitizeSecurityAdvisory(&a.SecurityAdvisory)
 }

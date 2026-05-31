@@ -1,7 +1,7 @@
+version: "2"
 run:
   concurrency: 4
   tests: true
-
 linters:
   enable:
     - bodyclose
@@ -16,21 +16,27 @@ linters:
     - govet
     - ineffassign
     - unused
-
-issues:
-  exclude-rules:
-    - path: (third_party|builtin|examples)
-      linters:
-        - staticcheck
-        - gosec
-        - gocritic
-        - errcheck
-        - revive
-        - unused
-
-linters-settings:
-  staticcheck:
-    checks:
-      - "all"
-      - "-QF1008"
-      - "-ST1000"
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+  settings:
+    staticcheck:
+      checks:
+        - "all"
+        - -QF1008
+        - -ST1000
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
