@@ -25,6 +25,7 @@ linters-settings:
       - -ST1000
 
 issues:
+  exclude-use-default: true
   exclude-rules:
     - path: (third_party|builtin|examples)
       linters:
@@ -32,9 +33,3 @@ issues:
         - revive
         - errcheck
         - gosec
-    - text: "comments"
-      linters:
-        - revive
-    - text: "common-false-positives"
-    - text: "legacy"
-    - text: "std-error-handling"
