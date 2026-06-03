@@ -9,6 +9,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -84,6 +85,7 @@ func GetDependabotAlert(t translations.TranslationHelperFunc) inventory.ServerTo
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get alert", resp, body), nil, nil
 			}
 
+			sanitizeDependabotAlert(alert)
 			r, err := json.Marshal(alert)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal alert", err), nil, err
@@ -175,6 +177,9 @@ func ListDependabotAlerts(t translations.TranslationHelperFunc) inventory.Server
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list alerts", resp, body), nil, nil
 			}
 
+			for _, a := range alerts {
+				sanitizeDependabotAlert(a)
+			}
 			r, err := json.Marshal(alerts)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal alerts", err), nil, err
@@ -183,4 +188,21 @@ func ListDependabotAlerts(t translations.TranslationHelperFunc) inventory.Server
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+func sanitizeDependabotAlert(a *github.DependabotAlert) {
+	if a == nil {
+		return
+	}
+	if a.DismissedComment != nil {
+		a.DismissedComment = github.Ptr(sanitize.Sanitize(*a.DismissedComment))
+	}
+	if a.SecurityAdvisory != nil {
+		if a.SecurityAdvisory.Summary != nil {
+			a.SecurityAdvisory.Summary = github.Ptr(sanitize.Sanitize(*a.SecurityAdvisory.Summary))
+		}
+		if a.SecurityAdvisory.Description != nil {
+			a.SecurityAdvisory.Description = github.Ptr(sanitize.Sanitize(*a.SecurityAdvisory.Description))
+		}
+	}
 }

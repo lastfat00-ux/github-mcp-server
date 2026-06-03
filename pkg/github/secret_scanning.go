@@ -9,6 +9,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -84,6 +85,7 @@ func GetSecretScanningAlert(t translations.TranslationHelperFunc) inventory.Serv
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get alert", resp, body), nil, nil
 			}
 
+			sanitizeSecretScanningAlert(alert)
 			r, err := json.Marshal(alert)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal alert: %w", err)
@@ -178,6 +180,9 @@ func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.Se
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list alerts", resp, body), nil, nil
 			}
 
+			for _, a := range alerts {
+				sanitizeSecretScanningAlert(a)
+			}
 			r, err := json.Marshal(alerts)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal alerts: %w", err)
@@ -186,4 +191,19 @@ func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.Se
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+func sanitizeSecretScanningAlert(a *github.SecretScanningAlert) {
+	if a == nil {
+		return
+	}
+	if a.ResolutionComment != nil {
+		a.ResolutionComment = github.Ptr(sanitize.Sanitize(*a.ResolutionComment))
+	}
+	if a.PushProtectionBypassRequestComment != nil {
+		a.PushProtectionBypassRequestComment = github.Ptr(sanitize.Sanitize(*a.PushProtectionBypassRequestComment))
+	}
+	if a.PushProtectionBypassRequestReviewerComment != nil {
+		a.PushProtectionBypassRequestReviewerComment = github.Ptr(sanitize.Sanitize(*a.PushProtectionBypassRequestReviewerComment))
+	}
 }
