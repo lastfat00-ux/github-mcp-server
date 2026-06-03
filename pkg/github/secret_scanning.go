@@ -180,8 +180,8 @@ func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.Se
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list alerts", resp, body), nil, nil
 			}
 
-			for _, alert := range alerts {
-				sanitizeSecretScanningAlert(alert)
+			for _, a := range alerts {
+				sanitizeSecretScanningAlert(a)
 			}
 			r, err := json.Marshal(alerts)
 			if err != nil {
@@ -193,17 +193,17 @@ func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.Se
 	)
 }
 
-func sanitizeSecretScanningAlert(alert *github.SecretScanningAlert) {
-	if alert == nil {
+func sanitizeSecretScanningAlert(a *github.SecretScanningAlert) {
+	if a == nil {
 		return
 	}
-	if alert.ResolutionComment != nil {
-		alert.ResolutionComment = github.Ptr(sanitize.Sanitize(*alert.ResolutionComment))
+	if a.ResolutionComment != nil {
+		a.ResolutionComment = github.Ptr(sanitize.Sanitize(*a.ResolutionComment))
 	}
-	if alert.PushProtectionBypassRequestComment != nil {
-		alert.PushProtectionBypassRequestComment = github.Ptr(sanitize.Sanitize(*alert.PushProtectionBypassRequestComment))
+	if a.PushProtectionBypassRequestComment != nil {
+		a.PushProtectionBypassRequestComment = github.Ptr(sanitize.Sanitize(*a.PushProtectionBypassRequestComment))
 	}
-	if alert.PushProtectionBypassRequestReviewerComment != nil {
-		alert.PushProtectionBypassRequestReviewerComment = github.Ptr(sanitize.Sanitize(*alert.PushProtectionBypassRequestReviewerComment))
+	if a.PushProtectionBypassRequestReviewerComment != nil {
+		a.PushProtectionBypassRequestReviewerComment = github.Ptr(sanitize.Sanitize(*a.PushProtectionBypassRequestReviewerComment))
 	}
 }

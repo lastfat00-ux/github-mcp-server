@@ -1,7 +1,19 @@
-version: "2"
 run:
   concurrency: 4
+  timeout: 5m
   tests: true
+
+linters-settings:
+  staticcheck:
+    checks:
+      - "all"
+      - -QF1008
+      - -ST1000
+  revive:
+    rules:
+      - name: exported
+        disabled: true
+
 linters:
   enable:
     - bodyclose
@@ -16,27 +28,11 @@ linters:
     - govet
     - ineffassign
     - unused
-  exclusions:
-    generated: lax
-    presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
-  settings:
-    staticcheck:
-      checks:
-        - "all"
-        - -QF1008
-        - -ST1000
-formatters:
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+
+issues:
+  exclude-rules:
+    - path: (third-party|builtin|examples)
+      linters:
+        - staticcheck
+        - errcheck
+        - govet

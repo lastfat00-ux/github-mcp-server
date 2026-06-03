@@ -177,8 +177,8 @@ func ListDependabotAlerts(t translations.TranslationHelperFunc) inventory.Server
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list alerts", resp, body), nil, nil
 			}
 
-			for _, alert := range alerts {
-				sanitizeDependabotAlert(alert)
+			for _, a := range alerts {
+				sanitizeDependabotAlert(a)
 			}
 			r, err := json.Marshal(alerts)
 			if err != nil {
@@ -190,19 +190,19 @@ func ListDependabotAlerts(t translations.TranslationHelperFunc) inventory.Server
 	)
 }
 
-func sanitizeDependabotAlert(alert *github.DependabotAlert) {
-	if alert == nil {
+func sanitizeDependabotAlert(a *github.DependabotAlert) {
+	if a == nil {
 		return
 	}
-	if alert.DismissedComment != nil {
-		alert.DismissedComment = github.Ptr(sanitize.Sanitize(*alert.DismissedComment))
+	if a.DismissedComment != nil {
+		a.DismissedComment = github.Ptr(sanitize.Sanitize(*a.DismissedComment))
 	}
-	if alert.SecurityAdvisory != nil {
-		if alert.SecurityAdvisory.Summary != nil {
-			alert.SecurityAdvisory.Summary = github.Ptr(sanitize.Sanitize(*alert.SecurityAdvisory.Summary))
+	if a.SecurityAdvisory != nil {
+		if a.SecurityAdvisory.Summary != nil {
+			a.SecurityAdvisory.Summary = github.Ptr(sanitize.Sanitize(*a.SecurityAdvisory.Summary))
 		}
-		if alert.SecurityAdvisory.Description != nil {
-			alert.SecurityAdvisory.Description = github.Ptr(sanitize.Sanitize(*alert.SecurityAdvisory.Description))
+		if a.SecurityAdvisory.Description != nil {
+			a.SecurityAdvisory.Description = github.Ptr(sanitize.Sanitize(*a.SecurityAdvisory.Description))
 		}
 	}
 }
