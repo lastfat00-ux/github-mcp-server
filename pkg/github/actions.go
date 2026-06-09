@@ -13,6 +13,7 @@ import (
 	buffer "github.com/github/github-mcp-server/pkg/buffer"
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -108,6 +109,12 @@ func ListWorkflows(t translations.TranslationHelperFunc) inventory.ServerTool {
 				return nil, nil, fmt.Errorf("failed to list workflows: %w", err)
 			}
 			defer func() { _ = resp.Body.Close() }()
+
+			for _, w := range workflows.Workflows {
+				if w.Name != nil {
+					w.Name = github.Ptr(sanitize.Sanitize(*w.Name))
+				}
+			}
 
 			r, err := json.Marshal(workflows)
 			if err != nil {
@@ -2044,6 +2051,12 @@ func listWorkflows(ctx context.Context, client *github.Client, owner, repo strin
 		return ghErrors.NewGitHubAPIErrorResponse(ctx, "failed to list workflows", resp, err), nil, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	for _, w := range workflows.Workflows {
+		if w.Name != nil {
+			w.Name = github.Ptr(sanitize.Sanitize(*w.Name))
+		}
+	}
 
 	r, err := json.Marshal(workflows)
 	if err != nil {
