@@ -18,7 +18,7 @@ func TestActions_Security(t *testing.T) {
 
 	t.Run("ListWorkflows sanitization", func(t *testing.T) {
 		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-			GetReposActionsWorkflowsByOwnerByRepo: func(w http.ResponseWriter, r *http.Request) {
+			GetReposActionsWorkflowsByOwnerByRepo: func(w http.ResponseWriter, _ *http.Request) {
 				workflows := &github.Workflows{
 					TotalCount: github.Ptr(1),
 					Workflows: []*github.Workflow{
@@ -27,7 +27,7 @@ func TestActions_Security(t *testing.T) {
 						},
 					},
 				}
-				json.NewEncoder(w).Encode(workflows)
+				_ = json.NewEncoder(w).Encode(workflows)
 			},
 		})
 		client := github.NewClient(mockedClient)
@@ -48,7 +48,7 @@ func TestActions_Security(t *testing.T) {
 
 	t.Run("ActionsList list_workflows sanitization", func(t *testing.T) {
 		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-			GetReposActionsWorkflowsByOwnerByRepo: func(w http.ResponseWriter, r *http.Request) {
+			GetReposActionsWorkflowsByOwnerByRepo: func(w http.ResponseWriter, _ *http.Request) {
 				workflows := &github.Workflows{
 					TotalCount: github.Ptr(1),
 					Workflows: []*github.Workflow{
@@ -57,7 +57,7 @@ func TestActions_Security(t *testing.T) {
 						},
 					},
 				}
-				json.NewEncoder(w).Encode(workflows)
+				_ = json.NewEncoder(w).Encode(workflows)
 			},
 		})
 		client := github.NewClient(mockedClient)

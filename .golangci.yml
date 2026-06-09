@@ -1,6 +1,10 @@
 run:
   concurrency: 4
   tests: true
+  exclude-dirs:
+    - third_party
+    - builtin
+    - examples
 
 linters:
   enable:
@@ -23,9 +27,3 @@ linters-settings:
       - "all"
       - "-QF1008"
       - "-ST1000"
-
-issues:
-  exclude-rules:
-    - path: third_party
-    - path: builtin
-    - path: examples
