@@ -118,7 +118,6 @@ func searchHandler(
 			issue.Body = github.Ptr(sanitize.Sanitize(*issue.Body))
 		}
 	}
-
 	r, err := json.Marshal(result)
 	if err != nil {
 		return utils.NewToolResultErrorFromErr(errorPrefix+": failed to marshal response", err), nil
