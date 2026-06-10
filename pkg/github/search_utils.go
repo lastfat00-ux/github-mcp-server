@@ -9,6 +9,7 @@ import (
 	"regexp"
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/utils"
 	"github.com/google/go-github/v79/github"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -108,6 +109,15 @@ func searchHandler(
 		return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, errorPrefix, resp, body), nil
 	}
 
+	// Sanitize results
+	for _, issue := range result.Issues {
+		if issue.Title != nil {
+			issue.Title = github.Ptr(sanitize.Sanitize(*issue.Title))
+		}
+		if issue.Body != nil {
+			issue.Body = github.Ptr(sanitize.Sanitize(*issue.Body))
+		}
+	}
 	r, err := json.Marshal(result)
 	if err != nil {
 		return utils.NewToolResultErrorFromErr(errorPrefix+": failed to marshal response", err), nil
