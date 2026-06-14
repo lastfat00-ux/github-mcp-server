@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
@@ -94,10 +95,11 @@ func GetLabel(t translations.TranslationHelperFunc) inventory.ServerTool {
 			}
 
 			label := map[string]any{
-				"id":          fmt.Sprintf("%v", query.Repository.Label.ID),
-				"name":        string(query.Repository.Label.Name),
-				"color":       string(query.Repository.Label.Color),
-				"description": string(query.Repository.Label.Description),
+				"id":    fmt.Sprintf("%v", query.Repository.Label.ID),
+				"name":  string(query.Repository.Label.Name),
+				"color": string(query.Repository.Label.Color),
+				// Sanitize description to prevent XSS from untrusted user content
+				"description": sanitize.Sanitize(string(query.Repository.Label.Description)),
 			}
 
 			out, err := json.Marshal(label)
@@ -187,10 +189,11 @@ func ListLabels(t translations.TranslationHelperFunc) inventory.ServerTool {
 			labels := make([]map[string]any, len(query.Repository.Labels.Nodes))
 			for i, labelNode := range query.Repository.Labels.Nodes {
 				labels[i] = map[string]any{
-					"id":          fmt.Sprintf("%v", labelNode.ID),
-					"name":        string(labelNode.Name),
-					"color":       string(labelNode.Color),
-					"description": string(labelNode.Description),
+					"id":    fmt.Sprintf("%v", labelNode.ID),
+					"name":  string(labelNode.Name),
+					"color": string(labelNode.Color),
+					// Sanitize description to prevent XSS from untrusted user content
+					"description": sanitize.Sanitize(string(labelNode.Description)),
 				}
 			}
 
