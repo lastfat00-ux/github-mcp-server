@@ -512,7 +512,7 @@ func Test_DiscussionSanitization(t *testing.T) {
 				"createdAt":  "2025-04-25T12:00:00Z",
 				"closed":     false,
 				"isAnswered": false,
-				"category":   map[string]any{"name": "General"},
+				"category":   map[string]any{"name": "Malicious <script>alert('xss')</script> Category"},
 			}},
 		})
 
@@ -533,6 +533,8 @@ func Test_DiscussionSanitization(t *testing.T) {
 
 		assert.Equal(t, "Malicious  Title", out["title"])
 		assert.Equal(t, "Malicious  Body", out["body"])
+		category := out["category"].(map[string]any)
+		assert.Equal(t, "Malicious  Category", category["name"])
 	})
 
 	t.Run("GetDiscussionComments sanitization", func(t *testing.T) {
@@ -584,6 +586,52 @@ func Test_DiscussionSanitization(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, response.Comments, 1)
 		assert.Equal(t, "Malicious  Comment", *response.Comments[0].Body)
+	})
+
+	t.Run("ListDiscussionCategories sanitization", func(t *testing.T) {
+		toolDef := ListDiscussionCategories(translations.NullTranslationHelper)
+		qListCategories := "query($first:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussionCategories(first: $first){nodes{id,name},pageInfo{hasNextPage,hasPreviousPage,startCursor,endCursor},totalCount}}}"
+		vars := map[string]interface{}{
+			"owner": "owner",
+			"repo":  "repo",
+			"first": float64(25),
+		}
+
+		maliciousResponse := githubv4mock.DataResponse(map[string]any{
+			"repository": map[string]any{
+				"discussionCategories": map[string]any{
+					"nodes": []map[string]any{
+						{"id": "123", "name": "Malicious <script>alert('xss')</script> Category"},
+					},
+					"pageInfo": map[string]any{
+						"hasNextPage":     false,
+						"hasPreviousPage": false,
+						"startCursor":     "",
+						"endCursor":       "",
+					},
+					"totalCount": 1,
+				},
+			},
+		})
+
+		matcher := githubv4mock.NewQueryMatcher(qListCategories, vars, maliciousResponse)
+		httpClient := githubv4mock.NewMockedHTTPClient(matcher)
+		gqlClient := githubv4.NewClient(httpClient)
+		deps := BaseDeps{GQLClient: gqlClient}
+		handler := toolDef.Handler(deps)
+
+		reqParams := map[string]interface{}{"owner": "owner", "repo": "repo"}
+		req := createMCPRequest(reqParams)
+		res, err := handler(ContextWithDeps(context.Background(), deps), &req)
+		require.NoError(t, err)
+
+		text := getTextResult(t, res).Text
+		var response struct {
+			Categories []map[string]string `json:"categories"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(text), &response))
+		assert.Len(t, response.Categories, 1)
+		assert.Equal(t, "Malicious  Category", response.Categories[0]["name"])
 	})
 }
 
