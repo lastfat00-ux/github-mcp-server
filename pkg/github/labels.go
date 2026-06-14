@@ -95,10 +95,9 @@ func GetLabel(t translations.TranslationHelperFunc) inventory.ServerTool {
 			}
 
 			label := map[string]any{
-				"id":    fmt.Sprintf("%v", query.Repository.Label.ID),
-				"name":  string(query.Repository.Label.Name),
-				"color": string(query.Repository.Label.Color),
-				// Sanitize description to prevent XSS from untrusted user content
+				"id":          fmt.Sprintf("%v", query.Repository.Label.ID),
+				"name":        string(query.Repository.Label.Name),
+				"color":       string(query.Repository.Label.Color),
 				"description": sanitize.Sanitize(string(query.Repository.Label.Description)),
 			}
 
@@ -189,10 +188,9 @@ func ListLabels(t translations.TranslationHelperFunc) inventory.ServerTool {
 			labels := make([]map[string]any, len(query.Repository.Labels.Nodes))
 			for i, labelNode := range query.Repository.Labels.Nodes {
 				labels[i] = map[string]any{
-					"id":    fmt.Sprintf("%v", labelNode.ID),
-					"name":  string(labelNode.Name),
-					"color": string(labelNode.Color),
-					// Sanitize description to prevent XSS from untrusted user content
+					"id":          fmt.Sprintf("%v", labelNode.ID),
+					"name":        string(labelNode.Name),
+					"color":       string(labelNode.Color),
 					"description": sanitize.Sanitize(string(labelNode.Description)),
 				}
 			}
