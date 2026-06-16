@@ -7,9 +7,11 @@ import (
 	"testing"
 
 	"github.com/github/github-mcp-server/internal/toolsnaps"
+	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/google/go-github/v79/github"
 	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -738,6 +740,29 @@ func Test_GetNotificationDetails(t *testing.T) {
 			err = json.Unmarshal([]byte(textContent.Text), &returned)
 			require.NoError(t, err)
 			assert.Equal(t, *tc.expectResult.ID, *returned.ID)
+		})
+	}
+}
+
+func TestNotificationsSecurity(t *testing.T) {
+	mockN := &github.Notification{ID: github.Ptr("123"), Subject: &github.NotificationSubject{Title: github.Ptr("XSS <script>alert(1)</script>")}}
+	deps := BaseDeps{Client: github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetNotifications:                  mockResponse(t, http.StatusOK, []*github.Notification{mockN}),
+		GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, mockN),
+	}))}
+
+	for _, tc := range []struct {
+		name string
+		tool inventory.ServerTool
+		args map[string]any
+	}{
+		{"List", ListNotifications(translations.NullTranslationHelper), map[string]any{}},
+		{"Get", GetNotificationDetails(translations.NullTranslationHelper), map[string]any{"notificationID": "123"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := tc.tool.Handler(deps)(ContextWithDeps(context.Background(), deps), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: MustMarshal(tc.args)}})
+			require.NoError(t, err)
+			assert.NotContains(t, getTextResult(t, res).Text, "script")
 		})
 	}
 }
