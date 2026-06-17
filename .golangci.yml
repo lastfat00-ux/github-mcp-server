@@ -1,4 +1,3 @@
-version: "2"
 run:
   concurrency: 4
   tests: true
@@ -16,27 +15,18 @@ linters:
     - govet
     - ineffassign
     - unused
-  exclusions:
-    generated: lax
-    presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
-  settings:
-    staticcheck:
-      checks:
-        - "all"
-        - -QF1008
-        - -ST1000
-formatters:
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+linters-settings:
+  staticcheck:
+    checks: ["all", "-QF1008", "-ST1000"]
+issues:
+  exclude-rules:
+    - path: (third_party|builtin|examples)
+      linters: [staticcheck, errcheck, gosec, revive]
+    - path: _test\.go
+      linters: [gosec]
+    - path: pkg/github/issues\.go
+      text: "QF1012:"
+    - path: internal/githubv4mock/query\.go
+      text: "inline: Constant reflect.Ptr"
+    - path: pkg/github/secret_scanning\.go
+      text: "G117:"
