@@ -464,9 +464,9 @@ func GetPullRequestReviews(ctx context.Context, client *github.Client, cache *lo
 				if isSafeContent {
 					filteredReviews = append(filteredReviews, review)
 				}
+				reviews = filteredReviews
 			}
 		}
-		reviews = filteredReviews
 	}
 
 	// Sanitize review bodies to prevent XSS from untrusted user content
