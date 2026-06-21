@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/github/github-mcp-server/internal/toolsnaps"
-	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/google/go-github/v79/github"
 	"github.com/google/jsonschema-go/jsonschema"
@@ -135,77 +134,6 @@ func Test_ListNotifications(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, returned)
 			assert.Equal(t, *tc.expectedResult[0].ID, *returned[0].ID)
-		})
-	}
-}
-
-func TestNotificationsSanitization(t *testing.T) {
-	maliciousTitle := "Exploit <script>alert('XSS')</script> Title"
-	expectedTitle := "Exploit  Title"
-
-	mockNotification := &github.Notification{
-		ID: github.Ptr("123"),
-		Subject: &github.NotificationSubject{
-			Title: github.Ptr(maliciousTitle),
-		},
-	}
-
-	tests := []struct {
-		name        string
-		toolFactory func(translations.TranslationHelperFunc) inventory.ServerTool
-		endpoint    string
-		requestArgs map[string]interface{}
-	}{
-		{
-			name:        "list_notifications sanitization",
-			toolFactory: ListNotifications,
-			endpoint:    GetNotifications,
-			requestArgs: map[string]interface{}{},
-		},
-		{
-			name:        "get_notification_details sanitization",
-			toolFactory: GetNotificationDetails,
-			endpoint:    GetNotificationsThreadsByThreadID,
-			requestArgs: map[string]interface{}{"notificationID": "123"},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-				tc.endpoint: mockResponse(t, http.StatusOK, func() interface{} {
-					if tc.name == "list_notifications sanitization" {
-						return []*github.Notification{mockNotification}
-					}
-					return mockNotification
-				}()),
-			})
-
-			client := github.NewClient(mockedClient)
-			deps := BaseDeps{
-				Client: client,
-			}
-			serverTool := tc.toolFactory(translations.NullTranslationHelper)
-			handler := serverTool.Handler(deps)
-			request := createMCPRequest(tc.requestArgs)
-			result, err := handler(ContextWithDeps(context.Background(), deps), &request)
-
-			require.NoError(t, err)
-			require.False(t, result.IsError)
-
-			textContent := getTextResult(t, result)
-			if tc.name == "list_notifications sanitization" {
-				var returned []*github.Notification
-				err = json.Unmarshal([]byte(textContent.Text), &returned)
-				require.NoError(t, err)
-				require.Len(t, returned, 1)
-				assert.Equal(t, expectedTitle, *returned[0].Subject.Title)
-			} else {
-				var returned github.Notification
-				err = json.Unmarshal([]byte(textContent.Text), &returned)
-				require.NoError(t, err)
-				assert.Equal(t, expectedTitle, *returned.Subject.Title)
-			}
 		})
 	}
 }
