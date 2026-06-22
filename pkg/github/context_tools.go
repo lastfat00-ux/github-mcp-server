@@ -7,6 +7,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -75,14 +76,14 @@ func GetMe(t translations.TranslationHelperFunc) inventory.ServerTool {
 				ProfileURL: user.GetHTMLURL(),
 				AvatarURL:  user.GetAvatarURL(),
 				Details: &UserDetails{
-					Name:              user.GetName(),
-					Company:           user.GetCompany(),
-					Blog:              user.GetBlog(),
-					Location:          user.GetLocation(),
-					Email:             user.GetEmail(),
+					Name:              sanitize.Sanitize(user.GetName()),
+					Company:           sanitize.Sanitize(user.GetCompany()),
+					Blog:              sanitize.Sanitize(user.GetBlog()),
+					Location:          sanitize.Sanitize(user.GetLocation()),
+					Email:             sanitize.Sanitize(user.GetEmail()),
 					Hireable:          user.GetHireable(),
-					Bio:               user.GetBio(),
-					TwitterUsername:   user.GetTwitterUsername(),
+					Bio:               sanitize.Sanitize(user.GetBio()),
+					TwitterUsername:   sanitize.Sanitize(user.GetTwitterUsername()),
 					PublicRepos:       user.GetPublicRepos(),
 					PublicGists:       user.GetPublicGists(),
 					Followers:         user.GetFollowers(),
@@ -195,9 +196,9 @@ func GetTeams(t translations.TranslationHelperFunc) inventory.ServerTool {
 
 				for _, team := range org.Teams.Nodes {
 					orgTeams.Teams = append(orgTeams.Teams, TeamInfo{
-						Name:        string(team.Name),
+						Name:        sanitize.Sanitize(string(team.Name)),
 						Slug:        string(team.Slug),
-						Description: string(team.Description),
+						Description: sanitize.Sanitize(string(team.Description)),
 					})
 				}
 
