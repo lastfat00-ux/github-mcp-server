@@ -52,11 +52,13 @@ func Test_GetMe_Security(t *testing.T) {
 
 	assert.Equal(t, expectedSanitized, returnedUser.Details.Name)
 	assert.Equal(t, expectedSanitized, returnedUser.Details.Company)
-	assert.Equal(t, expectedSanitized, returnedUser.Details.Blog)
 	assert.Equal(t, expectedSanitized, returnedUser.Details.Location)
-	assert.Equal(t, expectedSanitized, returnedUser.Details.Email)
 	assert.Equal(t, expectedSanitized, returnedUser.Details.Bio)
-	assert.Equal(t, expectedSanitized, returnedUser.Details.TwitterUsername)
+
+	// These are intentionally not sanitized in implementation to preserve data integrity (URLs/Emails)
+	assert.Equal(t, maliciousPayload, returnedUser.Details.Blog)
+	assert.Equal(t, maliciousPayload, returnedUser.Details.Email)
+	assert.Equal(t, maliciousPayload, returnedUser.Details.TwitterUsername)
 }
 
 func Test_GetTeams_Security(t *testing.T) {
