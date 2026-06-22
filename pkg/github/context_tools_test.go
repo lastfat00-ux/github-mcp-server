@@ -90,6 +90,35 @@ func Test_GetMe(t *testing.T) {
 			expectToolError:    true,
 			expectedToolErrMsg: "expected test failure",
 		},
+		{
+			name: "successful get user with xss sanitization",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetUser: mockResponse(t, http.StatusOK, &github.User{
+					Login:           github.Ptr("testuser"),
+					Name:            github.Ptr("Test<script>alert(1)</script>"),
+					Email:           github.Ptr("test<script>alert(1)</script>@example.com"),
+					Bio:             github.Ptr("Bio<script>alert(1)</script>"),
+					Company:         github.Ptr("Company<script>alert(1)</script>"),
+					Location:        github.Ptr("Location<script>alert(1)</script>"),
+					HTMLURL:         github.Ptr("https://github.com/testuser"),
+					TwitterUsername: github.Ptr("twitter<script>alert(1)</script>"),
+					Hireable:        github.Ptr(true),
+				}),
+			}),
+			requestArgs:     map[string]any{},
+			expectToolError: false,
+			expectedUser: &github.User{
+				Login:           github.Ptr("testuser"),
+				Name:            github.Ptr("Test"),
+				Email:           github.Ptr("test@example.com"),
+				Bio:             github.Ptr("Bio"),
+				Company:         github.Ptr("Company"),
+				Location:        github.Ptr("Location"),
+				TwitterUsername: github.Ptr("twitter"),
+				HTMLURL:         github.Ptr("https://github.com/testuser"),
+				Hireable:        github.Ptr(true),
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -377,6 +406,63 @@ func Test_GetTeams(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("get teams with xss sanitization", func(t *testing.T) {
+		mockTeamsResponse := githubv4mock.DataResponse(map[string]any{
+			"user": map[string]any{
+				"organizations": map[string]any{
+					"nodes": []map[string]any{
+						{
+							"login": "testorg1",
+							"teams": map[string]any{
+								"nodes": []map[string]any{
+									{
+										"name":        "team<script>alert(1)</script>",
+										"slug":        "team1",
+										"description": "desc<script>alert(1)</script>",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+
+		queryStr := "query($login:String!){user(login: $login){organizations(first: 100){nodes{login,teams(first: 100, userLogins: [$login]){nodes{name,slug,description}}}}}}"
+		vars := map[string]interface{}{
+			"login": "testuser",
+		}
+		matcher := githubv4mock.NewQueryMatcher(queryStr, vars, mockTeamsResponse)
+		httpClient := githubv4mock.NewMockedHTTPClient(matcher)
+		gqlClient := githubv4.NewClient(httpClient)
+
+		mockUser := &github.User{Login: github.Ptr("testuser")}
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetUser: mockResponse(t, http.StatusOK, mockUser),
+		})
+
+		deps := BaseDeps{
+			Client:    github.NewClient(mockedClient),
+			GQLClient: gqlClient,
+		}
+		handler := serverTool.Handler(deps)
+
+		request := createMCPRequest(map[string]any{})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var organizations []OrganizationTeams
+		err = json.Unmarshal([]byte(textContent.Text), &organizations)
+		require.NoError(t, err)
+
+		require.Len(t, organizations, 1)
+		require.Len(t, organizations[0].Teams, 1)
+		assert.Equal(t, "team", organizations[0].Teams[0].Name)
+		assert.Equal(t, "desc", organizations[0].Teams[0].Description)
+	})
 }
 
 func Test_GetTeamMembers(t *testing.T) {

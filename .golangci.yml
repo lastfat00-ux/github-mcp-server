@@ -1,7 +1,7 @@
+version: "2"
 run:
   concurrency: 4
   tests: true
-
 linters:
   enable:
     - bodyclose
@@ -16,31 +16,27 @@ linters:
     - govet
     - ineffassign
     - unused
-
-issues:
-  exclude-rules:
-    - path: third_party$
-      linters:
-        - revive
-    - path: builtin$
-      linters:
-        - revive
-    - path: examples$
-      linters:
-        - revive
-  # Exclude directories from being scanned
-  exclude-dirs:
-    - third-party
-    - builtin
-    - examples
-
-linters-settings:
-  staticcheck:
-    checks:
-      - "all"
-      - "-QF1008"
-      - "-ST1000"
-  revive:
-    rules:
-      - name: exported
-        disabled: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+  settings:
+    staticcheck:
+      checks:
+        - "all"
+        - -QF1008
+        - -ST1000
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
