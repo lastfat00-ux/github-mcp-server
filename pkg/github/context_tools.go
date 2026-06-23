@@ -7,6 +7,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -75,13 +76,13 @@ func GetMe(t translations.TranslationHelperFunc) inventory.ServerTool {
 				ProfileURL: user.GetHTMLURL(),
 				AvatarURL:  user.GetAvatarURL(),
 				Details: &UserDetails{
-					Name:              user.GetName(),
-					Company:           user.GetCompany(),
+					Name:              sanitize.Sanitize(user.GetName()),
+					Company:           sanitize.Sanitize(user.GetCompany()),
 					Blog:              user.GetBlog(),
-					Location:          user.GetLocation(),
+					Location:          sanitize.Sanitize(user.GetLocation()),
 					Email:             user.GetEmail(),
 					Hireable:          user.GetHireable(),
-					Bio:               user.GetBio(),
+					Bio:               sanitize.Sanitize(user.GetBio()),
 					TwitterUsername:   user.GetTwitterUsername(),
 					PublicRepos:       user.GetPublicRepos(),
 					PublicGists:       user.GetPublicGists(),
@@ -197,7 +198,7 @@ func GetTeams(t translations.TranslationHelperFunc) inventory.ServerTool {
 					orgTeams.Teams = append(orgTeams.Teams, TeamInfo{
 						Name:        string(team.Name),
 						Slug:        string(team.Slug),
-						Description: string(team.Description),
+						Description: sanitize.Sanitize(string(team.Description)),
 					})
 				}
 
