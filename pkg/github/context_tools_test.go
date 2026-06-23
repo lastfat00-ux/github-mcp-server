@@ -90,6 +90,31 @@ func Test_GetMe(t *testing.T) {
 			expectToolError:    true,
 			expectedToolErrMsg: "expected test failure",
 		},
+		{
+			name: "sanitization of user profile",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetUser: mockResponse(t, http.StatusOK, &github.User{
+					Login:   github.Ptr("testuser"),
+					Name:    github.Ptr("Name <script>"),
+					Bio:     github.Ptr("Bio <script>"),
+					Company: github.Ptr("Company <script>"),
+					HTMLURL: github.Ptr("https://github.com/testuser"),
+				}),
+			}),
+			requestArgs:     map[string]any{},
+			expectToolError: false,
+			expectedUser: &github.User{
+				Login:           github.Ptr("testuser"),
+				Name:            github.Ptr("Name "),
+				Bio:             github.Ptr("Bio "),
+				Company:         github.Ptr("Company "),
+				HTMLURL:         github.Ptr("https://github.com/testuser"),
+				Email:           github.Ptr(""),
+				Location:        github.Ptr(""),
+				Hireable:        github.Ptr(false),
+				TwitterUsername: github.Ptr(""),
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -333,6 +358,42 @@ func Test_GetTeams(t *testing.T) {
 			expectToolError:    true,
 			expectedToolErrMsg: "failed to get GitHub GQL client: GraphQL client error",
 		},
+		{
+			name: "sanitization of team description",
+			makeDeps: func() ToolDependencies {
+				mockTeamsResponse := githubv4mock.DataResponse(map[string]any{
+					"user": map[string]any{
+						"organizations": map[string]any{
+							"nodes": []map[string]any{
+								{
+									"login": "testorg",
+									"teams": map[string]any{
+										"nodes": []map[string]any{
+											{
+												"name":        "team1",
+												"slug":        "team1",
+												"description": "Description <script>",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				})
+				queryStr := "query($login:String!){user(login: $login){organizations(first: 100){nodes{login,teams(first: 100, userLogins: [$login]){nodes{name,slug,description}}}}}}"
+				vars := map[string]interface{}{"login": "testuser"}
+				matcher := githubv4mock.NewQueryMatcher(queryStr, vars, mockTeamsResponse)
+				httpClient := githubv4mock.NewMockedHTTPClient(matcher)
+				return BaseDeps{
+					Client:    github.NewClient(httpClientWithUser()),
+					GQLClient: githubv4.NewClient(httpClient),
+				}
+			},
+			requestArgs:        map[string]any{},
+			expectToolError:    false,
+			expectedTeamsCount: 1,
+		},
 	}
 
 	for _, tc := range tests {
@@ -361,6 +422,10 @@ func Test_GetTeams(t *testing.T) {
 			assert.Len(t, organizations, tc.expectedTeamsCount)
 
 			if tc.expectedTeamsCount > 0 {
+				if tc.name == "sanitization of team description" {
+					assert.Equal(t, "Description ", organizations[0].Teams[0].Description)
+					return
+				}
 				assert.Equal(t, "testorg1", organizations[0].Org)
 				assert.Len(t, organizations[0].Teams, 2)
 				assert.Equal(t, "team1", organizations[0].Teams[0].Name)
