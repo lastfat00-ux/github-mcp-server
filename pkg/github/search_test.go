@@ -168,6 +168,35 @@ func Test_SearchRepositories(t *testing.T) {
 	}
 }
 
+func Test_SearchSecuritySanitization(t *testing.T) {
+	malicious := "Malicious <script>alert(1)</script>"
+	expected := "Malicious "
+	mockIssues := &github.IssuesSearchResult{Total: github.Ptr(1), Issues: []*github.Issue{{Title: &malicious, Body: &malicious}}}
+	t.Run("issues", func(t *testing.T) {
+		client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{GetSearchIssues: mockResponse(t, 200, mockIssues)}))
+		deps := BaseDeps{Client: client}
+		req := createMCPRequest(map[string]any{"query": "test"})
+		serverTool := SearchIssues(translations.NullTranslationHelper)
+		res, err := serverTool.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+		require.NoError(t, err)
+		var out github.IssuesSearchResult
+		_ = json.Unmarshal([]byte(getTextResult(t, res).Text), &out)
+		assert.Equal(t, expected, *out.Issues[0].Title)
+	})
+	t.Run("repos", func(t *testing.T) {
+		mockRepos := &github.RepositoriesSearchResult{Total: github.Ptr(1), Repositories: []*github.Repository{{Description: &malicious}}}
+		client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{GetSearchRepositories: mockResponse(t, 200, mockRepos)}))
+		deps := BaseDeps{Client: client}
+		req := createMCPRequest(map[string]any{"query": "test"})
+		serverTool := SearchRepositories(translations.NullTranslationHelper)
+		res, err := serverTool.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+		require.NoError(t, err)
+		var out MinimalSearchRepositoriesResult
+		_ = json.Unmarshal([]byte(getTextResult(t, res).Text), &out)
+		assert.Equal(t, expected, out.Items[0].Description)
+	})
+}
+
 func Test_SearchRepositories_FullOutput(t *testing.T) {
 	mockSearchResult := &github.RepositoriesSearchResult{
 		Total:             github.Ptr(1),
