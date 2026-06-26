@@ -96,6 +96,25 @@ func Test_ListNotifications(t *testing.T) {
 			expectedResult: []*github.Notification{mockNotification},
 		},
 		{
+			name: "sanitization for XSS payload",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{{
+					ID: github.Ptr("123"),
+					Subject: &github.NotificationSubject{
+						Title: github.Ptr("Title with <script>alert('XSS')</script>"),
+					},
+				}}),
+			}),
+			requestArgs: map[string]interface{}{},
+			expectError: false,
+			expectedResult: []*github.Notification{{
+				ID: github.Ptr("123"),
+				Subject: &github.NotificationSubject{
+					Title: github.Ptr("Title with "),
+				},
+			}},
+		},
+		{
 			name: "error",
 			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
 				GetNotifications: mockResponse(t, http.StatusInternalServerError, `{"message": "error"}`),
@@ -134,6 +153,9 @@ func Test_ListNotifications(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, returned)
 			assert.Equal(t, *tc.expectedResult[0].ID, *returned[0].ID)
+			if tc.expectedResult[0].Subject != nil && tc.expectedResult[0].Subject.Title != nil {
+				assert.Equal(t, *tc.expectedResult[0].Subject.Title, *returned[0].Subject.Title)
+			}
 		})
 	}
 }
