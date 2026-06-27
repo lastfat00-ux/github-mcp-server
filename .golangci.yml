@@ -27,12 +27,6 @@ linters-settings:
 issues:
   exclude-use-default: false
   exclude-rules:
-    - path: third_party$
-      linters:
-        - staticcheck
-    - path: builtin$
-      linters:
-        - staticcheck
-    - path: examples$
+    - path: (third_party|builtin|examples)
       linters:
         - staticcheck
