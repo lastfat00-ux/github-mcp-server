@@ -1,6 +1,7 @@
 run:
   concurrency: 4
   tests: true
+
 linters:
   enable:
     - bodyclose
@@ -15,27 +16,23 @@ linters:
     - govet
     - ineffassign
     - unused
-  exclusions:
-    generated: lax
-    presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
-  linters-settings:
-    staticcheck:
-      checks:
-        - "all"
-        - -QF1008
-        - -ST1000
-formatters:
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+
+linters-settings:
+  staticcheck:
+    checks:
+      - "all"
+      - -QF1008
+      - -ST1000
+
+issues:
+  exclude-use-default: false
+  exclude-rules:
+    - path: third_party$
+      linters:
+        - staticcheck
+    - path: builtin$
+      linters:
+        - staticcheck
+    - path: examples$
+      linters:
+        - staticcheck

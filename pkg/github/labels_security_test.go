@@ -25,7 +25,6 @@ func Test_LabelsSecurity_XSS(t *testing.T) {
 		mockData    map[string]any
 		query       any
 		vars        map[string]any
-		isMutation  bool
 	}{
 		{
 			name: "get_label sanitization",
