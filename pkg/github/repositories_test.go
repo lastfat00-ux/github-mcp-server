@@ -1404,8 +1404,8 @@ func Test_CreateOrUpdateFile(t *testing.T) {
 			assert.Equal(t, *tc.expectedContent.Content.SHA, *returnedContent.Content.SHA)
 
 			// Verify commit
-			assert.Equal(t, *tc.expectedContent.Commit.SHA, *returnedContent.Commit.SHA)
-			assert.Equal(t, *tc.expectedContent.Commit.Message, *returnedContent.Commit.Message)
+			assert.Equal(t, *tc.expectedContent.SHA, *returnedContent.SHA)
+			assert.Equal(t, *tc.expectedContent.Message, *returnedContent.Message)
 		})
 	}
 }
