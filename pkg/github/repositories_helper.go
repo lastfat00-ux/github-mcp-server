@@ -45,7 +45,7 @@ func initializeRepository(ctx context.Context, client *github.Client, owner, rep
 	}
 
 	// Get the commit that was just created to use as base for remaining files
-	baseCommit, resp, err = client.Git.GetCommit(ctx, owner, repo, *createResp.Commit.SHA)
+	baseCommit, resp, err = client.Git.GetCommit(ctx, owner, repo, *createResp.SHA)
 	if err != nil {
 		_, _ = ghErrors.NewGitHubAPIErrorToCtx(ctx, "failed to get initial commit", resp, err)
 		return nil, nil, fmt.Errorf("failed to get initial commit: %w", err)

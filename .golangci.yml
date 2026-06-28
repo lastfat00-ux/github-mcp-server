@@ -27,7 +27,7 @@ linters:
       - third_party$
       - builtin$
       - examples$
-  linters-settings:
+  settings:
     staticcheck:
       checks:
         - "all"
