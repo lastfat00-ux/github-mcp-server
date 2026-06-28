@@ -37,6 +37,9 @@ func Test_ListNotifications(t *testing.T) {
 	mockNotification := &github.Notification{
 		ID:     github.Ptr("123"),
 		Reason: github.Ptr("mention"),
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr("Test Notification"),
+		},
 	}
 
 	tests := []struct {
@@ -104,6 +107,29 @@ func Test_ListNotifications(t *testing.T) {
 			expectError:    true,
 			expectedErrMsg: "error",
 		},
+		{
+			name: "XSS sanitization in notification title",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{
+					{
+						ID: github.Ptr("xss-1"),
+						Subject: &github.NotificationSubject{
+							Title: github.Ptr("Malicious <script>alert('XSS')</script> Title"),
+						},
+					},
+				}),
+			}),
+			requestArgs: map[string]interface{}{},
+			expectError: false,
+			expectedResult: []*github.Notification{
+				{
+					ID: github.Ptr("xss-1"),
+					Subject: &github.NotificationSubject{
+						Title: github.Ptr("Malicious  Title"),
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -134,6 +160,10 @@ func Test_ListNotifications(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, returned)
 			assert.Equal(t, *tc.expectedResult[0].ID, *returned[0].ID)
+
+			if tc.name == "XSS sanitization in notification title" {
+				assert.Equal(t, *tc.expectedResult[0].Subject.Title, *returned[0].Subject.Title)
+			}
 		})
 	}
 }
