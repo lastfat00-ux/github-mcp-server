@@ -211,7 +211,7 @@ func fragmentToIssue(fragment IssueFragment) *github.Issue {
 		foundLabels = append(foundLabels, &github.Label{
 			Name:        github.Ptr(string(labelNode.Name)),
 			NodeID:      github.Ptr(string(labelNode.ID)),
-			Description: github.Ptr(string(labelNode.Description)),
+			Description: github.Ptr(sanitize.Sanitize(string(labelNode.Description))),
 		})
 	}
 
@@ -527,7 +527,7 @@ func GetIssueLabels(ctx context.Context, client *githubv4.Client, owner string, 
 			"id":          fmt.Sprintf("%v", label.ID),
 			"name":        string(label.Name),
 			"color":       string(label.Color),
-			"description": string(label.Description),
+			"description": sanitize.Sanitize(string(label.Description)),
 		}
 	}
 
