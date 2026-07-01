@@ -19,7 +19,7 @@ linters:
     - unused
 
 issues:
-  exclude-generated: true
+  exclude-generated: strict
   exclude-rules:
     - path: (third_party|builtin|examples)
       linters:
