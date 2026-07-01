@@ -146,9 +146,13 @@ func Test_NotificationsXSS(t *testing.T) {
 		deps := &BaseDeps{Client: cl}
 		st := ListNotifications(translations.NullTranslationHelper)
 		req := createMCPRequest(nil)
-		res, _ := st.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+		res, err := st.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+		require.NoError(t, err)
+		require.False(t, res.IsError)
 		var ret []*github.Notification
-		json.Unmarshal([]byte(getTextResult(t, res).Text), &ret)
+		err = json.Unmarshal([]byte(getTextResult(t, res).Text), &ret)
+		require.NoError(t, err)
+		require.NotEmpty(t, ret)
 		assert.Equal(t, exp, *ret[0].Subject.Title)
 	})
 	t.Run("details", func(t *testing.T) {
@@ -156,9 +160,12 @@ func Test_NotificationsXSS(t *testing.T) {
 		deps := &BaseDeps{Client: cl}
 		st := GetNotificationDetails(translations.NullTranslationHelper)
 		req := createMCPRequest(map[string]any{"notificationID": "1"})
-		res, _ := st.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+		res, err := st.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+		require.NoError(t, err)
+		require.False(t, res.IsError)
 		var ret github.Notification
-		json.Unmarshal([]byte(getTextResult(t, res).Text), &ret)
+		err = json.Unmarshal([]byte(getTextResult(t, res).Text), &ret)
+		require.NoError(t, err)
 		assert.Equal(t, exp, *ret.Subject.Title)
 	})
 }
