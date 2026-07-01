@@ -138,6 +138,31 @@ func Test_ListNotifications(t *testing.T) {
 	}
 }
 
+func Test_NotificationsXSS(t *testing.T) {
+	mal, exp := "<script>alert(1)</script><b>Safe</b>", "<b>Safe</b>"
+	mockN := &github.Notification{ID: github.Ptr("1"), Subject: &github.NotificationSubject{Title: github.Ptr(mal)}}
+	t.Run("list", func(t *testing.T) {
+		cl := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{GetNotifications: mockResponse(t, 200, []*github.Notification{mockN})}))
+		deps := &BaseDeps{Client: cl}
+		st := ListNotifications(translations.NullTranslationHelper)
+		req := createMCPRequest(nil)
+		res, _ := st.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+		var ret []*github.Notification
+		json.Unmarshal([]byte(getTextResult(t, res).Text), &ret)
+		assert.Equal(t, exp, *ret[0].Subject.Title)
+	})
+	t.Run("details", func(t *testing.T) {
+		cl := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{GetNotificationsThreadsByThreadID: mockResponse(t, 200, mockN)}))
+		deps := &BaseDeps{Client: cl}
+		st := GetNotificationDetails(translations.NullTranslationHelper)
+		req := createMCPRequest(map[string]any{"notificationID": "1"})
+		res, _ := st.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+		var ret github.Notification
+		json.Unmarshal([]byte(getTextResult(t, res).Text), &ret)
+		assert.Equal(t, exp, *ret.Subject.Title)
+	})
+}
+
 func Test_ManageNotificationSubscription(t *testing.T) {
 	// Verify tool definition and schema
 	serverTool := ManageNotificationSubscription(translations.NullTranslationHelper)
