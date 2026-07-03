@@ -69,5 +69,5 @@ func (c *Client) GetRawContent(ctx context.Context, owner, repo, path string, op
 		return nil, err
 	}
 
-	return c.client.Client().Do(req)
+	return c.client.Client().Do(req) //nolint:gosec // Internal request to GitHub raw API
 }
