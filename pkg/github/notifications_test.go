@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/github/github-mcp-server/internal/toolsnaps"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/google/go-github/v79/github"
 	"github.com/google/jsonschema-go/jsonschema"
@@ -661,6 +662,33 @@ func Test_MarkAllNotificationsRead(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_NotificationsXSS(t *testing.T) {
+	malicious := "XSS <script>alert(1)</script>"
+	expected := sanitize.Sanitize(malicious)
+	mock := &github.Notification{Subject: &github.NotificationSubject{Title: &malicious}}
+	client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{mock}),
+		GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, mock),
+	}))
+	deps := BaseDeps{Client: client}
+	t.Run("List", func(t *testing.T) {
+		tool := ListNotifications(translations.NullTranslationHelper)
+		req := createMCPRequest(nil)
+		res, _ := tool.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+		var ret []*github.Notification
+		_ = json.Unmarshal([]byte(getTextResult(t, res).Text), &ret)
+		assert.Equal(t, expected, *ret[0].Subject.Title)
+	})
+	t.Run("Get", func(t *testing.T) {
+		tool := GetNotificationDetails(translations.NullTranslationHelper)
+		req := createMCPRequest(map[string]any{"notificationID": "1"})
+		res, _ := tool.Handler(deps)(ContextWithDeps(context.Background(), deps), &req)
+		var ret github.Notification
+		_ = json.Unmarshal([]byte(getTextResult(t, res).Text), &ret)
+		assert.Equal(t, expected, *ret.Subject.Title)
+	})
 }
 
 func Test_GetNotificationDetails(t *testing.T) {
