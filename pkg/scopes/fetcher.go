@@ -76,7 +76,7 @@ func (f *Fetcher) FetchTokenScopes(ctx context.Context, token string) ([]string,
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
-	resp, err := f.client.Do(req)
+	resp, err := f.client.Do(req) //nolint:gosec // Internal request to GitHub API
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch scopes: %w", err)
 	}
