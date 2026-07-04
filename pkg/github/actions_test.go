@@ -556,6 +556,7 @@ func Test_ListWorkflowRunArtifacts(t *testing.T) {
 			assert.NotNil(t, response.TotalCount)
 			assert.Greater(t, *response.TotalCount, int64(0))
 			assert.NotEmpty(t, response.Artifacts)
+
 		})
 	}
 }
