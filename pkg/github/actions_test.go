@@ -95,6 +95,29 @@ func Test_ListWorkflows(t *testing.T) {
 			expectError:    true,
 			expectedErrMsg: "missing required parameter: owner",
 		},
+		{
+			name: "workflow listing with malicious name",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetReposActionsWorkflowsByOwnerByRepo: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					workflows := &github.Workflows{
+						TotalCount: github.Ptr(1),
+						Workflows: []*github.Workflow{
+							{
+								ID:   github.Ptr(int64(123)),
+								Name: github.Ptr("CI <script>alert('xss')</script>"),
+							},
+						},
+					}
+					w.WriteHeader(http.StatusOK)
+					_ = json.NewEncoder(w).Encode(workflows)
+				}),
+			}),
+			requestArgs: map[string]any{
+				"owner": "owner",
+				"repo":  "repo",
+			},
+			expectError: false,
+		},
 	}
 
 	for _, tc := range tests {
@@ -130,6 +153,10 @@ func Test_ListWorkflows(t *testing.T) {
 			assert.NotNil(t, response.TotalCount)
 			assert.Greater(t, *response.TotalCount, 0)
 			assert.NotEmpty(t, response.Workflows)
+
+			if tc.name == "workflow listing with malicious name" {
+				assert.Equal(t, "CI ", *response.Workflows[0].Name)
+			}
 		})
 	}
 }
