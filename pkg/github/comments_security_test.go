@@ -52,7 +52,6 @@ func TestCommentsXSS(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, returnedComments, 1)
 
-		// This will fail before the fix
 		assert.Equal(t, expectedSanitized, *returnedComments[0].Body)
 	})
 
@@ -90,7 +89,6 @@ func TestCommentsXSS(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, returnedSubIssues, 1)
 
-		// This will fail before the fix
 		assert.Equal(t, expectedSanitized, *returnedSubIssues[0].Title)
 		assert.Equal(t, expectedSanitized, *returnedSubIssues[0].Body)
 	})
@@ -171,7 +169,6 @@ func TestCommentsXSS(t *testing.T) {
 		require.Len(t, response.ReviewThreads, 1)
 		require.Len(t, response.ReviewThreads[0].Comments.Nodes, 1)
 
-		// This will fail before the fix
 		assert.Equal(t, expectedSanitized, string(response.ReviewThreads[0].Comments.Nodes[0].Body))
 	})
 
@@ -208,7 +205,6 @@ func TestCommentsXSS(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, returnedReviews, 1)
 
-		// This will fail before the fix
 		assert.Equal(t, expectedSanitized, *returnedReviews[0].Body)
 	})
 }
