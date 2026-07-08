@@ -10,7 +10,6 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
-	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -347,10 +346,6 @@ func ListProjectFields(t translations.TranslationHelperFunc) inventory.ServerToo
 			}
 			defer func() { _ = resp.Body.Close() }()
 
-			for _, field := range projectFields {
-				sanitizeProjectV2Field(field)
-			}
-
 			response := map[string]any{
 				"fields":   projectFields,
 				"pageInfo": buildPageInfo(resp),
@@ -451,9 +446,6 @@ func GetProjectField(t translations.TranslationHelperFunc) inventory.ServerTool 
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get project field", resp, body), nil, nil
 			}
-
-			sanitizeProjectV2Field(projectField)
-
 			r, err := json.Marshal(projectField)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -588,10 +580,6 @@ func ListProjectItems(t translations.TranslationHelperFunc) inventory.ServerTool
 			}
 			defer func() { _ = resp.Body.Close() }()
 
-			for _, item := range projectItems {
-				sanitizeProjectV2Item(item)
-			}
-
 			response := map[string]any{
 				"items":    projectItems,
 				"pageInfo": buildPageInfo(resp),
@@ -705,8 +693,6 @@ func GetProjectItem(t translations.TranslationHelperFunc) inventory.ServerTool {
 				), nil, nil
 			}
 			defer func() { _ = resp.Body.Close() }()
-
-			sanitizeProjectV2Item(projectItem)
 
 			r, err := json.Marshal(projectItem)
 			if err != nil {
@@ -822,9 +808,6 @@ func AddProjectItem(t translations.TranslationHelperFunc) inventory.ServerTool {
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, ProjectAddFailedError, resp, body), nil, nil
 			}
-
-			sanitizeProjectV2Item(addedItem)
-
 			r, err := json.Marshal(addedItem)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -940,9 +923,6 @@ func UpdateProjectItem(t translations.TranslationHelperFunc) inventory.ServerToo
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, ProjectUpdateFailedError, resp, body), nil, nil
 			}
-
-			sanitizeProjectV2Item(updatedItem)
-
 			r, err := json.Marshal(updatedItem)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -1473,10 +1453,6 @@ func listProjectFields(ctx context.Context, client *github.Client, args map[stri
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	for _, field := range projectFields {
-		sanitizeProjectV2Field(field)
-	}
-
 	response := map[string]any{
 		"fields":   projectFields,
 		"pageInfo": buildPageInfo(resp),
@@ -1541,10 +1517,6 @@ func listProjectItems(ctx context.Context, client *github.Client, args map[strin
 		), nil, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
-
-	for _, item := range projectItems {
-		sanitizeProjectV2Item(item)
-	}
 
 	response := map[string]any{
 		"items":    projectItems,
@@ -1622,9 +1594,6 @@ func getProjectField(ctx context.Context, client *github.Client, owner, ownerTyp
 		}
 		return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get project field", resp, body), nil, nil
 	}
-
-	sanitizeProjectV2Field(projectField)
-
 	r, err := json.Marshal(projectField)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -1667,8 +1636,6 @@ func getProjectItem(ctx context.Context, client *github.Client, owner, ownerType
 		}
 		return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get project item", resp, body), nil, nil
 	}
-
-	sanitizeProjectV2Item(projectItem)
 
 	r, err := json.Marshal(projectItem)
 	if err != nil {
@@ -1714,9 +1681,6 @@ func addProjectItem(ctx context.Context, client *github.Client, owner, ownerType
 		}
 		return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, ProjectAddFailedError, resp, body), nil, nil
 	}
-
-	sanitizeProjectV2Item(addedItem)
-
 	r, err := json.Marshal(addedItem)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -1756,9 +1720,6 @@ func updateProjectItem(ctx context.Context, client *github.Client, owner, ownerT
 		}
 		return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, ProjectUpdateFailedError, resp, body), nil, nil
 	}
-
-	sanitizeProjectV2Item(updatedItem)
-
 	r, err := json.Marshal(updatedItem)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -1870,30 +1831,6 @@ func buildPageInfo(resp *github.Response) pageInfo {
 		HasPreviousPage: resp.Before != "",
 		NextCursor:      resp.After,
 		PrevCursor:      resp.Before,
-	}
-}
-
-func sanitizeProjectV2Field(field *github.ProjectV2Field) {
-	if field == nil {
-		return
-	}
-	if field.Name != nil {
-		field.Name = github.Ptr(sanitize.Sanitize(*field.Name))
-	}
-}
-
-func sanitizeProjectV2Item(item *github.ProjectV2Item) {
-	if item == nil {
-		return
-	}
-	for _, fv := range item.Fields {
-		if fv == nil {
-			continue
-		}
-		fv.Name = sanitize.Sanitize(fv.Name)
-		if val, ok := fv.Value.(string); ok {
-			fv.Value = sanitize.Sanitize(val)
-		}
 	}
 }
 
