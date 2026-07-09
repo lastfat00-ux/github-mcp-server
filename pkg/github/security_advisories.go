@@ -200,8 +200,12 @@ func ListGlobalSecurityAdvisories(t translations.TranslationHelperFunc) inventor
 			}
 
 			for _, a := range advisories {
-				a.Summary = github.Ptr(sanitize.Sanitize(a.GetSummary()))
-				a.Description = github.Ptr(sanitize.Sanitize(a.GetDescription()))
+				if a.Summary != nil {
+					a.Summary = github.Ptr(sanitize.Sanitize(*a.Summary))
+				}
+				if a.Description != nil {
+					a.Description = github.Ptr(sanitize.Sanitize(*a.Description))
+				}
 			}
 
 			r, err := json.Marshal(advisories)
@@ -309,8 +313,12 @@ func ListRepositorySecurityAdvisories(t translations.TranslationHelperFunc) inve
 			}
 
 			for _, a := range advisories {
-				a.Summary = github.Ptr(sanitize.Sanitize(a.GetSummary()))
-				a.Description = github.Ptr(sanitize.Sanitize(a.GetDescription()))
+				if a.Summary != nil {
+					a.Summary = github.Ptr(sanitize.Sanitize(*a.Summary))
+				}
+				if a.Description != nil {
+					a.Description = github.Ptr(sanitize.Sanitize(*a.Description))
+				}
 			}
 
 			r, err := json.Marshal(advisories)
@@ -370,8 +378,12 @@ func GetGlobalSecurityAdvisory(t translations.TranslationHelperFunc) inventory.S
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get advisory", resp, body), nil, nil
 			}
 
-			advisory.Summary = github.Ptr(sanitize.Sanitize(advisory.GetSummary()))
-			advisory.Description = github.Ptr(sanitize.Sanitize(advisory.GetDescription()))
+			if advisory.Summary != nil {
+				advisory.Summary = github.Ptr(sanitize.Sanitize(*advisory.Summary))
+			}
+			if advisory.Description != nil {
+				advisory.Description = github.Ptr(sanitize.Sanitize(*advisory.Description))
+			}
 
 			r, err := json.Marshal(advisory)
 			if err != nil {
@@ -469,8 +481,12 @@ func ListOrgRepositorySecurityAdvisories(t translations.TranslationHelperFunc) i
 			}
 
 			for _, a := range advisories {
-				a.Summary = github.Ptr(sanitize.Sanitize(a.GetSummary()))
-				a.Description = github.Ptr(sanitize.Sanitize(a.GetDescription()))
+				if a.Summary != nil {
+					a.Summary = github.Ptr(sanitize.Sanitize(*a.Summary))
+				}
+				if a.Description != nil {
+					a.Description = github.Ptr(sanitize.Sanitize(*a.Description))
+				}
 			}
 
 			r, err := json.Marshal(advisories)
