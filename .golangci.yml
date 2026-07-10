@@ -2,7 +2,9 @@ version: "2"
 run:
   concurrency: 4
   tests: true
+
 linters:
+  disable-all: true
   enable:
     - bodyclose
     - gocritic
@@ -16,27 +18,23 @@ linters:
     - govet
     - ineffassign
     - unused
-  exclusions:
-    generated: lax
-    presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+
 linters-settings:
   staticcheck:
     checks:
       - "all"
       - -QF1008
       - -ST1000
-formatters:
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+
+issues:
+  exclude-dirs:
+    - third-party
+    - builtin
+    - examples
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
