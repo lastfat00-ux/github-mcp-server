@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/github/github-mcp-server/internal/toolsnaps"
+	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/google/go-github/v79/github"
 	"github.com/google/jsonschema-go/jsonschema"
@@ -134,6 +135,87 @@ func Test_ListNotifications(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, returned)
 			assert.Equal(t, *tc.expectedResult[0].ID, *returned[0].ID)
+		})
+	}
+}
+
+func Test_NotificationsXSS(t *testing.T) {
+	maliciousTitle := "<script>alert('xss')</script>Normal Title"
+	expectedSanitized := "Normal Title"
+
+	mockNotification := &github.Notification{
+		ID: github.Ptr("123"),
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr(maliciousTitle),
+		},
+	}
+
+	// We need to re-mock specifically for GetNotificationDetails
+	mockThreadWithXSS := &github.Notification{
+		ID: github.Ptr("123"),
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr(maliciousTitle),
+		},
+	}
+
+	tests := []struct {
+		name string
+		tool inventory.ServerTool
+		args map[string]interface{}
+	}{
+		{
+			name: "ListNotifications sanitization",
+			tool: ListNotifications(translations.NullTranslationHelper),
+			args: map[string]interface{}{},
+		},
+		{
+			name: "GetNotificationDetails sanitization",
+			tool: GetNotificationDetails(translations.NullTranslationHelper),
+			args: map[string]interface{}{
+				"notificationID": "123",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Mock client based on the tool
+			var mockedClient *http.Client
+			if tc.tool.Tool.Name == "list_notifications" {
+				mockedClient = MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+					GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{mockNotification}),
+				})
+			} else {
+				mockedClient = MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+					GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, mockThreadWithXSS),
+				})
+			}
+
+			deps := BaseDeps{
+				Client: github.NewClient(mockedClient),
+			}
+			handler := tc.tool.Handler(deps)
+			request := createMCPRequest(tc.args)
+			result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+
+			require.NoError(t, err)
+			require.False(t, result.IsError)
+
+			textContent := getTextResult(t, result)
+
+			if tc.tool.Tool.Name == "list_notifications" {
+				var returned []*github.Notification
+				err = json.Unmarshal([]byte(textContent.Text), &returned)
+				require.NoError(t, err)
+				require.NotEmpty(t, returned)
+				// If this fails, it means sanitization is NOT implemented yet (expected for reproduction)
+				assert.Equal(t, expectedSanitized, *returned[0].Subject.Title, "Notification subject title should be sanitized")
+			} else {
+				var returned github.Notification
+				err = json.Unmarshal([]byte(textContent.Text), &returned)
+				require.NoError(t, err)
+				assert.Equal(t, expectedSanitized, *returned.Subject.Title, "Notification subject title should be sanitized")
+			}
 		})
 	}
 }
