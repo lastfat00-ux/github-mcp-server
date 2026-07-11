@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/josephburnett/jd/v2"
+	jd "github.com/josephburnett/jd/v2"
 )
 
 // Test checks that the JSON schema for a tool has not changed unexpectedly.
