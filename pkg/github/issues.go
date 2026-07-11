@@ -527,7 +527,7 @@ func GetIssueLabels(ctx context.Context, client *githubv4.Client, owner string, 
 			"id":          fmt.Sprintf("%v", label.ID),
 			"name":        string(label.Name),
 			"color":       string(label.Color),
-			"description": string(label.Description),
+			"description": sanitize.Sanitize(string(label.Description)),
 		}
 	}
 
