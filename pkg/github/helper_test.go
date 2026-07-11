@@ -468,7 +468,7 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	}
 
 	// Fall back to mock.Mock assertions if defined
-	args := m.Called(req)
+	args := m.Mock.Called(req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
