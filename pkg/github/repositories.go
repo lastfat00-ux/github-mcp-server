@@ -12,7 +12,6 @@ import (
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/octicons"
-	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -1939,7 +1938,7 @@ func ListStarredRepositories(t translations.TranslationHelperFunc) inventory.Ser
 					ID:            repo.GetID(),
 					Name:          repo.GetName(),
 					FullName:      repo.GetFullName(),
-					Description:   sanitize.Sanitize(repo.GetDescription()),
+					Description:   repo.GetDescription(),
 					HTMLURL:       repo.GetHTMLURL(),
 					Language:      repo.GetLanguage(),
 					Stars:         repo.GetStargazersCount(),
