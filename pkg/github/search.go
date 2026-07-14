@@ -9,6 +9,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -119,7 +120,7 @@ func SearchRepositories(t translations.TranslationHelperFunc) inventory.ServerTo
 						ID:            repo.GetID(),
 						Name:          repo.GetName(),
 						FullName:      repo.GetFullName(),
-						Description:   repo.GetDescription(),
+						Description:   sanitize.Sanitize(repo.GetDescription()),
 						HTMLURL:       repo.GetHTMLURL(),
 						Language:      repo.GetLanguage(),
 						Stars:         repo.GetStargazersCount(),
@@ -155,6 +156,12 @@ func SearchRepositories(t translations.TranslationHelperFunc) inventory.ServerTo
 					return utils.NewToolResultErrorFromErr("failed to marshal minimal response", err), nil, nil
 				}
 			} else {
+				// Sanitize descriptions for full output as well
+				for _, repo := range result.Repositories {
+					if repo.Description != nil {
+						repo.Description = github.Ptr(sanitize.Sanitize(*repo.Description))
+					}
+				}
 				r, err = json.Marshal(result)
 				if err != nil {
 					return utils.NewToolResultErrorFromErr("failed to marshal full response", err), nil, nil
