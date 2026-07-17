@@ -129,6 +129,48 @@ func Test_ListGlobalSecurityAdvisories(t *testing.T) {
 	}
 }
 
+func Test_SecurityAdvisoriesXSS(t *testing.T) {
+	// Setup mock global advisory with malicious HTML/JS payloads
+	maliciousAdvisory := &github.GlobalSecurityAdvisory{
+		SecurityAdvisory: github.SecurityAdvisory{
+			GHSAID:      github.Ptr("GHSA-xxxx-xxxx-xxxx"),
+			Summary:     github.Ptr("<script>alert('XSS')</script>Safe Summary"),
+			Description: github.Ptr("This is <b>safe bold</b> description with <img src=x onerror=alert(1)> image."),
+			Severity:    github.Ptr("high"),
+		},
+	}
+
+	toolDef := GetGlobalSecurityAdvisory(translations.NullTranslationHelper)
+	client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetAdvisoriesByGhsaID: mockResponse(t, http.StatusOK, maliciousAdvisory),
+	}))
+	deps := BaseDeps{Client: client}
+	handler := toolDef.Handler(deps)
+
+	request := createMCPRequest(map[string]interface{}{
+		"ghsaId": "GHSA-xxxx-xxxx-xxxx",
+	})
+
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+
+	textContent := getTextResult(t, result)
+
+	var returnedAdvisory github.GlobalSecurityAdvisory
+	err = json.Unmarshal([]byte(textContent.Text), &returnedAdvisory)
+	require.NoError(t, err)
+
+	// Script must be stripped entirely
+	assert.Equal(t, "Safe Summary", *returnedAdvisory.Summary)
+
+	// Safe bold tags must be preserved, but onerror attribute on img must be stripped
+	assert.Contains(t, *returnedAdvisory.Description, "<b>safe bold</b>")
+	assert.Contains(t, *returnedAdvisory.Description, "<img src=\"x\">")
+	assert.NotContains(t, *returnedAdvisory.Description, "onerror")
+	assert.NotContains(t, *returnedAdvisory.Description, "alert(1)")
+}
+
 func Test_GetGlobalSecurityAdvisory(t *testing.T) {
 	toolDef := GetGlobalSecurityAdvisory(translations.NullTranslationHelper)
 	tool := toolDef.Tool
