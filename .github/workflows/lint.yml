@@ -18,6 +18,7 @@ jobs:
         with:
           go-version: stable
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v2.5
+          version: v1.64.5
+          install-mode: goinstall
