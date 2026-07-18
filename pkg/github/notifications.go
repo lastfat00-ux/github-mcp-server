@@ -167,15 +167,6 @@ func ListNotifications(t translations.TranslationHelperFunc) inventory.ServerToo
 	)
 }
 
-func sanitizeNotification(n *github.Notification) {
-	if n == nil {
-		return
-	}
-	if n.Subject != nil && n.Subject.Title != nil {
-		n.Subject.Title = github.Ptr(sanitize.Sanitize(*n.Subject.Title))
-	}
-}
-
 // DismissNotification creates a tool to mark a notification as read/done.
 func DismissNotification(t translations.TranslationHelperFunc) inventory.ServerTool {
 	return NewTool(
@@ -412,6 +403,15 @@ func GetNotificationDetails(t translations.TranslationHelperFunc) inventory.Serv
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+func sanitizeNotification(n *github.Notification) {
+	if n == nil {
+		return
+	}
+	if n.Subject != nil && n.Subject.Title != nil {
+		n.Subject.Title = github.Ptr(sanitize.Sanitize(*n.Subject.Title))
+	}
 }
 
 // Enum values for ManageNotificationSubscription action
