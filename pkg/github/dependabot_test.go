@@ -109,6 +109,77 @@ func Test_GetDependabotAlert(t *testing.T) {
 	}
 }
 
+func Test_DependabotAlertsXSS(t *testing.T) {
+	maliciousAlert := &github.DependabotAlert{
+		Number:           github.Ptr(42),
+		State:            github.Ptr("open"),
+		HTMLURL:          github.Ptr("https://github.com/owner/repo/security/dependabot/42"),
+		DismissedComment: github.Ptr("<script>alert('xss1')</script>Comment"),
+		SecurityAdvisory: &github.DependabotSecurityAdvisory{
+			Summary:     github.Ptr("<img src=x onerror=alert('xss2')>Summary"),
+			Description: github.Ptr("<p>Description</p><iframe src='javascript:alert(1)'></iframe>"),
+			Severity:    github.Ptr("high"),
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetReposDependabotAlertsByOwnerByRepoByAlertNumber: mockResponse(t, http.StatusOK, maliciousAlert),
+		GetReposDependabotAlertsByOwnerByRepo:              mockResponse(t, http.StatusOK, []*github.DependabotAlert{maliciousAlert}),
+	})
+
+	client := github.NewClient(mockedClient)
+	deps := BaseDeps{Client: client}
+
+	t.Run("GetDependabotAlert sanitizes XSS", func(t *testing.T) {
+		toolDef := GetDependabotAlert(translations.NullTranslationHelper)
+		handler := toolDef.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{
+			"owner":       "owner",
+			"repo":        "repo",
+			"alertNumber": float64(42),
+		})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var alert github.DependabotAlert
+		err = json.Unmarshal([]byte(textContent.Text), &alert)
+		require.NoError(t, err)
+
+		// Assertions
+		assert.Equal(t, "Comment", *alert.DismissedComment)
+		assert.Equal(t, `<img src="x">Summary`, *alert.SecurityAdvisory.Summary)
+		assert.Equal(t, "<p>Description</p>", *alert.SecurityAdvisory.Description)
+	})
+
+	t.Run("ListDependabotAlerts sanitizes XSS", func(t *testing.T) {
+		toolDef := ListDependabotAlerts(translations.NullTranslationHelper)
+		handler := toolDef.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{
+			"owner": "owner",
+			"repo":  "repo",
+		})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var alerts []*github.DependabotAlert
+		err = json.Unmarshal([]byte(textContent.Text), &alerts)
+		require.NoError(t, err)
+		require.Len(t, alerts, 1)
+
+		alert := alerts[0]
+		// Assertions
+		assert.Equal(t, "Comment", *alert.DismissedComment)
+		assert.Equal(t, `<img src="x">Summary`, *alert.SecurityAdvisory.Summary)
+		assert.Equal(t, "<p>Description</p>", *alert.SecurityAdvisory.Description)
+	})
+}
+
 func Test_ListDependabotAlerts(t *testing.T) {
 	// Verify tool definition once
 	toolDef := ListDependabotAlerts(translations.NullTranslationHelper)
