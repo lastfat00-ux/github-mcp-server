@@ -75,6 +75,29 @@ func Test_ListGists(t *testing.T) {
 		expectedErrMsg string
 	}{
 		{
+			name: "list gists with malicious HTML in description",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetGists: mockResponse(t, http.StatusOK, []*github.Gist{
+					{
+						ID:          github.Ptr("malicious-gist"),
+						Description: github.Ptr("Malicious <script>alert('XSS')</script>description with <b>safe</b> html"),
+						HTMLURL:     github.Ptr("https://gist.github.com/user/malicious"),
+						Public:      github.Ptr(true),
+					},
+				}),
+			}),
+			requestArgs: map[string]interface{}{},
+			expectError: false,
+			expectedGists: []*github.Gist{
+				{
+					ID:          github.Ptr("malicious-gist"),
+					Description: github.Ptr("Malicious description with <b>safe</b> html"),
+					HTMLURL:     github.Ptr("https://gist.github.com/user/malicious"),
+					Public:      github.Ptr(true),
+				},
+			},
+		},
+		{
 			name: "list authenticated user's gists",
 			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
 				GetGists: mockResponse(t, http.StatusOK, mockGists),
@@ -224,6 +247,27 @@ func Test_GetGist(t *testing.T) {
 		expectedGists  github.Gist
 		expectedErrMsg string
 	}{
+		{
+			name: "get gist with malicious description",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetGistsByGistID: mockResponse(t, http.StatusOK, github.Gist{
+					ID:          github.Ptr("gist-malicious"),
+					Description: github.Ptr("Malicious <script>alert('XSS')</script>description with <b>safe</b> html"),
+					HTMLURL:     github.Ptr("https://gist.github.com/user/malicious"),
+					Public:      github.Ptr(true),
+				}),
+			}),
+			requestArgs: map[string]interface{}{
+				"gist_id": "gist-malicious",
+			},
+			expectError: false,
+			expectedGists: github.Gist{
+				ID:          github.Ptr("gist-malicious"),
+				Description: github.Ptr("Malicious description with <b>safe</b> html"),
+				HTMLURL:     github.Ptr("https://gist.github.com/user/malicious"),
+				Public:      github.Ptr(true),
+			},
+		},
 		{
 			name: "Successful fetching different gist",
 			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
