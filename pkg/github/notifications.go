@@ -11,6 +11,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -24,6 +25,21 @@ const (
 	FilterIncludeRead       = "include_read_notifications"
 	FilterOnlyParticipating = "only_participating"
 )
+
+// sanitizeNotification cleanses potentially unsafe input from notification subjects.
+// While client-side sanitization is crucial, an MCP server acts as a data provider
+// for diverse LLM clients and downstream user interfaces where rendering contexts
+// may be uncertain or direct HTML/Markdown rendering occurs. In alignment with the
+// project's "Defense in Depth" policy and Sentinel security directives, we sanitize
+// untrusted string content at the API response layer to prevent XSS.
+func sanitizeNotification(n *github.Notification) {
+	if n == nil {
+		return
+	}
+	if n.Subject != nil && n.Subject.Title != nil {
+		n.Subject.Title = github.Ptr(sanitize.Sanitize(*n.Subject.Title))
+	}
+}
 
 // ListNotifications creates a tool to list notifications for the current user.
 func ListNotifications(t translations.TranslationHelperFunc) inventory.ServerTool {
@@ -149,6 +165,10 @@ func ListNotifications(t translations.TranslationHelperFunc) inventory.ServerToo
 					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, nil
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get notifications", resp, body), nil, nil
+			}
+
+			for _, n := range notifications {
+				sanitizeNotification(n)
 			}
 
 			// Marshal response to JSON
@@ -387,6 +407,8 @@ func GetNotificationDetails(t translations.TranslationHelperFunc) inventory.Serv
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get notification details", resp, body), nil, nil
 			}
+
+			sanitizeNotification(thread)
 
 			r, err := json.Marshal(thread)
 			if err != nil {
