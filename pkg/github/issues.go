@@ -208,10 +208,13 @@ func fragmentToIssue(fragment IssueFragment) *github.Issue {
 	// Convert GraphQL labels to GitHub API labels format
 	var foundLabels []*github.Label
 	for _, labelNode := range fragment.Labels.Nodes {
+		// Sanitize label description using pkg/sanitize.Sanitize.
+		// This represents a 'Defense in Depth' design choice to protect downstream LLM-based clients
+		// that render markdown/HTML directly from potential XSS attacks.
 		foundLabels = append(foundLabels, &github.Label{
 			Name:        github.Ptr(string(labelNode.Name)),
 			NodeID:      github.Ptr(string(labelNode.ID)),
-			Description: github.Ptr(string(labelNode.Description)),
+			Description: github.Ptr(sanitize.Sanitize(string(labelNode.Description))),
 		})
 	}
 
@@ -523,11 +526,14 @@ func GetIssueLabels(ctx context.Context, client *githubv4.Client, owner string, 
 	// Extract label information
 	issueLabels := make([]map[string]any, len(query.Repository.Issue.Labels.Nodes))
 	for i, label := range query.Repository.Issue.Labels.Nodes {
+		// Sanitize the description field using pkg/sanitize.Sanitize.
+		// This implements a 'Defense in Depth' design choice to protect downstream LLM-based clients
+		// that render markdown/HTML directly from potential XSS attacks.
 		issueLabels[i] = map[string]any{
 			"id":          fmt.Sprintf("%v", label.ID),
 			"name":        string(label.Name),
 			"color":       string(label.Color),
-			"description": string(label.Description),
+			"description": sanitize.Sanitize(string(label.Description)),
 		}
 	}
 

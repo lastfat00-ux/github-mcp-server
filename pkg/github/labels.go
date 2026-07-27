@@ -8,6 +8,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -93,11 +94,14 @@ func GetLabel(t translations.TranslationHelperFunc) inventory.ServerTool {
 				return utils.NewToolResultError(fmt.Sprintf("label '%s' not found in %s/%s", name, owner, repo)), nil, nil
 			}
 
+			// Sanitize the description field using pkg/sanitize.Sanitize.
+			// This implements a 'Defense in Depth' design choice to protect downstream LLM-based clients
+			// that render markdown/HTML directly from potential XSS attacks.
 			label := map[string]any{
 				"id":          fmt.Sprintf("%v", query.Repository.Label.ID),
 				"name":        string(query.Repository.Label.Name),
 				"color":       string(query.Repository.Label.Color),
-				"description": string(query.Repository.Label.Description),
+				"description": sanitize.Sanitize(string(query.Repository.Label.Description)),
 			}
 
 			out, err := json.Marshal(label)
@@ -186,11 +190,14 @@ func ListLabels(t translations.TranslationHelperFunc) inventory.ServerTool {
 
 			labels := make([]map[string]any, len(query.Repository.Labels.Nodes))
 			for i, labelNode := range query.Repository.Labels.Nodes {
+				// Sanitize the description field using pkg/sanitize.Sanitize.
+				// This implements a 'Defense in Depth' design choice to protect downstream LLM-based clients
+				// that render markdown/HTML directly from potential XSS attacks.
 				labels[i] = map[string]any{
 					"id":          fmt.Sprintf("%v", labelNode.ID),
 					"name":        string(labelNode.Name),
 					"color":       string(labelNode.Color),
-					"description": string(labelNode.Description),
+					"description": sanitize.Sanitize(string(labelNode.Description)),
 				}
 			}
 
