@@ -358,6 +358,168 @@ func Test_GetIssue(t *testing.T) {
 	}
 }
 
+func Test_SubIssuesXSS(t *testing.T) {
+	maliciousSubIssue := &github.Issue{
+		Number:  github.Ptr(42),
+		Title:   github.Ptr("Malicious <script>alert('xss')</script> Title"),
+		Body:    github.Ptr("Malicious <script>alert('xss')</script> Body"),
+		State:   github.Ptr("open"),
+		HTMLURL: github.Ptr("https://github.com/owner/repo/issues/42"),
+		User: &github.User{
+			Login: github.Ptr("testuser"),
+		},
+	}
+
+	t.Run("GetSubIssues sanitization", func(t *testing.T) {
+		serverTool := IssueRead(translations.NullTranslationHelper)
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetReposIssuesSubIssuesByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, []*github.Issue{maliciousSubIssue}),
+		})
+
+		client := github.NewClient(mockedClient)
+		gqlClient := githubv4.NewClient(nil)
+		deps := BaseDeps{
+			Client:          client,
+			GQLClient:       gqlClient,
+			RepoAccessCache: stubRepoAccessCache(gqlClient, 15*time.Minute),
+			Flags:           stubFeatureFlags(map[string]bool{"lockdown-mode": false}),
+		}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{
+			"method":       "get_sub_issues",
+			"owner":        "owner",
+			"repo":         "repo",
+			"issue_number": float64(42),
+		})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returnedSubIssues []*github.Issue
+		err = json.Unmarshal([]byte(textContent.Text), &returnedSubIssues)
+		require.NoError(t, err)
+
+		require.Len(t, returnedSubIssues, 1)
+		assert.Equal(t, "Malicious  Title", *returnedSubIssues[0].Title)
+		assert.Equal(t, "Malicious  Body", *returnedSubIssues[0].Body)
+	})
+
+	t.Run("AddSubIssue sanitization", func(t *testing.T) {
+		serverTool := SubIssueWrite(translations.NullTranslationHelper)
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			PostReposIssuesSubIssuesByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusCreated, maliciousSubIssue),
+		})
+
+		client := github.NewClient(mockedClient)
+		gqlClient := githubv4.NewClient(nil)
+		deps := BaseDeps{
+			Client:          client,
+			GQLClient:       gqlClient,
+			RepoAccessCache: stubRepoAccessCache(gqlClient, 15*time.Minute),
+			Flags:           stubFeatureFlags(map[string]bool{"lockdown-mode": false}),
+		}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{
+			"method":       "add",
+			"owner":        "owner",
+			"repo":         "repo",
+			"issue_number": float64(42),
+			"sub_issue_id": float64(123),
+		})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returnedSubIssue *github.Issue
+		err = json.Unmarshal([]byte(textContent.Text), &returnedSubIssue)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Malicious  Title", *returnedSubIssue.Title)
+		assert.Equal(t, "Malicious  Body", *returnedSubIssue.Body)
+	})
+
+	t.Run("RemoveSubIssue sanitization", func(t *testing.T) {
+		serverTool := SubIssueWrite(translations.NullTranslationHelper)
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			DeleteReposIssuesSubIssueByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, maliciousSubIssue),
+		})
+
+		client := github.NewClient(mockedClient)
+		gqlClient := githubv4.NewClient(nil)
+		deps := BaseDeps{
+			Client:          client,
+			GQLClient:       gqlClient,
+			RepoAccessCache: stubRepoAccessCache(gqlClient, 15*time.Minute),
+			Flags:           stubFeatureFlags(map[string]bool{"lockdown-mode": false}),
+		}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{
+			"method":       "remove",
+			"owner":        "owner",
+			"repo":         "repo",
+			"issue_number": float64(42),
+			"sub_issue_id": float64(123),
+		})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returnedSubIssue *github.Issue
+		err = json.Unmarshal([]byte(textContent.Text), &returnedSubIssue)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Malicious  Title", *returnedSubIssue.Title)
+		assert.Equal(t, "Malicious  Body", *returnedSubIssue.Body)
+	})
+
+	t.Run("ReprioritizeSubIssue sanitization", func(t *testing.T) {
+		serverTool := SubIssueWrite(translations.NullTranslationHelper)
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			PatchReposIssuesSubIssuesPriorityByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, maliciousSubIssue),
+		})
+
+		client := github.NewClient(mockedClient)
+		gqlClient := githubv4.NewClient(nil)
+		deps := BaseDeps{
+			Client:          client,
+			GQLClient:       gqlClient,
+			RepoAccessCache: stubRepoAccessCache(gqlClient, 15*time.Minute),
+			Flags:           stubFeatureFlags(map[string]bool{"lockdown-mode": false}),
+		}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{
+			"method":       "reprioritize",
+			"owner":        "owner",
+			"repo":         "repo",
+			"issue_number": float64(42),
+			"sub_issue_id": float64(123),
+			"after_id":     float64(456),
+		})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returnedSubIssue *github.Issue
+		err = json.Unmarshal([]byte(textContent.Text), &returnedSubIssue)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Malicious  Title", *returnedSubIssue.Title)
+		assert.Equal(t, "Malicious  Body", *returnedSubIssue.Body)
+	})
+}
+
 func Test_AddIssueComment(t *testing.T) {
 	// Verify tool definition once
 	serverTool := AddIssueComment(translations.NullTranslationHelper)
