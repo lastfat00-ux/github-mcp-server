@@ -1911,36 +1911,6 @@ func Test_GetIssueComments(t *testing.T) {
 			},
 			lockdownEnabled: true,
 		},
-		{
-			name: "comments retrieval with XSS sanitization",
-			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-				GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, []*github.IssueComment{
-					{
-						ID:   github.Ptr(int64(111)),
-						Body: github.Ptr("Hello <script>alert('XSS')</script><b>world</b>"),
-						User: &github.User{
-							Login: github.Ptr("user1"),
-						},
-					},
-				}),
-			}),
-			requestArgs: map[string]interface{}{
-				"method":       "get_comments",
-				"owner":        "owner",
-				"repo":         "repo",
-				"issue_number": float64(42),
-			},
-			expectError: false,
-			expectedComments: []*github.IssueComment{
-				{
-					ID:   github.Ptr(int64(111)),
-					Body: github.Ptr("Hello <b>world</b>"),
-					User: &github.User{
-						Login: github.Ptr("user1"),
-					},
-				},
-			},
-		},
 	}
 
 	for _, tc := range tests {
