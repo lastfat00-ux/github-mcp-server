@@ -424,6 +424,14 @@ func GetIssueComments(ctx context.Context, client *github.Client, cache *lockdow
 		comments = filteredComments
 	}
 
+	// Defense in Depth: Sanitize Issue comment bodies using sanitize.Sanitize to prevent XSS from untrusted user content.
+	// This design choice protects downstream LLM-based clients that may render markdown/HTML directly, preventing malicious payloads.
+	for _, comment := range comments {
+		if comment.Body != nil {
+			comment.Body = github.Ptr(sanitize.Sanitize(*comment.Body))
+		}
+	}
+
 	r, err := json.Marshal(comments)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
