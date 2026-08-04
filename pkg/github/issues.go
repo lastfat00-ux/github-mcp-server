@@ -13,7 +13,7 @@ import (
 	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/lockdown"
 	"github.com/github/github-mcp-server/pkg/octicons"
-	"github.com/github/github-mcp-server/pkg/sanitize"
+	"github.com/github/github-mcp-server/pkg/sanitize" // imported for sanitization of untrusted user input
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -523,11 +523,14 @@ func GetIssueLabels(ctx context.Context, client *githubv4.Client, owner string, 
 	// Extract label information
 	issueLabels := make([]map[string]any, len(query.Repository.Issue.Labels.Nodes))
 	for i, label := range query.Repository.Issue.Labels.Nodes {
+		// Sanitize label description to prevent XSS from untrusted user content.
+		// This represents a "Defense in Depth" design choice to protect downstream LLM-based clients
+		// that may render markdown or HTML directly in their user interfaces.
 		issueLabels[i] = map[string]any{
 			"id":          fmt.Sprintf("%v", label.ID),
 			"name":        string(label.Name),
 			"color":       string(label.Color),
-			"description": string(label.Description),
+			"description": sanitize.Sanitize(string(label.Description)),
 		}
 	}
 
