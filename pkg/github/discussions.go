@@ -106,8 +106,10 @@ func fragmentToDiscussion(fragment NodeFragment) *github.Discussion {
 		User: &github.User{
 			Login: github.Ptr(string(fragment.Author.Login)),
 		},
+		// Sanitize Category Name to prevent XSS. We employ a 'Defense in Depth' design
+		// choice here to protect downstream LLM-based clients that render markdown/HTML directly.
 		DiscussionCategory: &github.DiscussionCategory{
-			Name: github.Ptr(string(fragment.Category.Name)),
+			Name: github.Ptr(sanitize.Sanitize(string(fragment.Category.Name))),
 		},
 	}
 }
@@ -363,8 +365,10 @@ func GetDiscussion(t translations.TranslationHelperFunc) inventory.ServerTool {
 				"closed":     bool(d.Closed),
 				"isAnswered": bool(d.IsAnswered),
 				"createdAt":  d.CreatedAt.Time,
+				// Sanitize Category Name to prevent XSS. We employ a 'Defense in Depth' design
+				// choice here to protect downstream LLM-based clients that render markdown/HTML directly.
 				"category": map[string]interface{}{
-					"name": string(d.Category.Name),
+					"name": sanitize.Sanitize(string(d.Category.Name)),
 				},
 			}
 
@@ -585,9 +589,11 @@ func ListDiscussionCategories(t translations.TranslationHelperFunc) inventory.Se
 
 			var categories []map[string]string
 			for _, c := range q.Repository.DiscussionCategories.Nodes {
+				// Sanitize Category Name to prevent XSS. We employ a 'Defense in Depth' design
+				// choice here to protect downstream LLM-based clients that render markdown/HTML directly.
 				categories = append(categories, map[string]string{
 					"id":   fmt.Sprint(c.ID),
-					"name": string(c.Name),
+					"name": sanitize.Sanitize(string(c.Name)),
 				})
 			}
 
