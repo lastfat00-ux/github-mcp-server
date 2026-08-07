@@ -9,6 +9,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -83,6 +84,9 @@ func GetSecretScanningAlert(t translations.TranslationHelperFunc) inventory.Serv
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get alert", resp, body), nil, nil
 			}
+
+			// Sanitize the alert before marshalling to prevent XSS.
+			sanitizeSecretScanningAlert(alert)
 
 			r, err := json.Marshal(alert)
 			if err != nil {
@@ -178,6 +182,11 @@ func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.Se
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list alerts", resp, body), nil, nil
 			}
 
+			// Sanitize the alerts before marshalling to prevent XSS.
+			for _, alert := range alerts {
+				sanitizeSecretScanningAlert(alert)
+			}
+
 			r, err := json.Marshal(alerts)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal alerts: %w", err)
@@ -186,4 +195,23 @@ func ListSecretScanningAlerts(t translations.TranslationHelperFunc) inventory.Se
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+// sanitizeSecretScanningAlert sanitizes the resolution and bypass request comments of a secret scanning alert.
+// This is a Defense in Depth security design choice to protect downstream LLM-based clients
+// that render markdown or HTML directly, preventing potential Cross-Site Scripting (XSS)
+// injection vulnerabilities from untrusted user-supplied comments.
+func sanitizeSecretScanningAlert(alert *github.SecretScanningAlert) {
+	if alert == nil {
+		return
+	}
+	if alert.ResolutionComment != nil {
+		*alert.ResolutionComment = sanitize.Sanitize(*alert.ResolutionComment)
+	}
+	if alert.PushProtectionBypassRequestComment != nil {
+		*alert.PushProtectionBypassRequestComment = sanitize.Sanitize(*alert.PushProtectionBypassRequestComment)
+	}
+	if alert.PushProtectionBypassRequestReviewerComment != nil {
+		*alert.PushProtectionBypassRequestReviewerComment = sanitize.Sanitize(*alert.PushProtectionBypassRequestReviewerComment)
+	}
 }
