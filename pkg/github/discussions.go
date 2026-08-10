@@ -106,8 +106,9 @@ func fragmentToDiscussion(fragment NodeFragment) *github.Discussion {
 		User: &github.User{
 			Login: github.Ptr(string(fragment.Author.Login)),
 		},
+		// Sanitize DiscussionCategory.Name to prevent XSS from untrusted user content
 		DiscussionCategory: &github.DiscussionCategory{
-			Name: github.Ptr(string(fragment.Category.Name)),
+			Name: github.Ptr(sanitize.Sanitize(string(fragment.Category.Name))),
 		},
 	}
 }
@@ -363,8 +364,9 @@ func GetDiscussion(t translations.TranslationHelperFunc) inventory.ServerTool {
 				"closed":     bool(d.Closed),
 				"isAnswered": bool(d.IsAnswered),
 				"createdAt":  d.CreatedAt.Time,
+				// Sanitize discussion category name to prevent XSS from untrusted user content
 				"category": map[string]interface{}{
-					"name": string(d.Category.Name),
+					"name": sanitize.Sanitize(string(d.Category.Name)),
 				},
 			}
 
@@ -585,9 +587,10 @@ func ListDiscussionCategories(t translations.TranslationHelperFunc) inventory.Se
 
 			var categories []map[string]string
 			for _, c := range q.Repository.DiscussionCategories.Nodes {
+				// Sanitize category name to prevent XSS from untrusted user content
 				categories = append(categories, map[string]string{
 					"id":   fmt.Sprint(c.ID),
-					"name": string(c.Name),
+					"name": sanitize.Sanitize(string(c.Name)),
 				})
 			}
 
