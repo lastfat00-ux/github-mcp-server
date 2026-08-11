@@ -358,6 +358,185 @@ func Test_GetIssue(t *testing.T) {
 	}
 }
 
+func Test_IssuesXSS(t *testing.T) {
+	// Initialize tool handler for IssueRead
+	serverTool := IssueRead(translations.NullTranslationHelper)
+
+	// Mock comments with a malicious payload
+	mockComments := []*github.IssueComment{
+		{
+			ID:   github.Ptr(int64(123)),
+			Body: github.Ptr("Hello <script>alert('xss')</script><b>world</b>"),
+			User: &github.User{
+				Login: github.Ptr("user1"),
+			},
+		},
+	}
+
+	// 1. Verify GetIssueComments (IssueRead with method: "get_comments") sanitizes Body
+	mockClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, mockComments),
+	})
+	deps := BaseDeps{
+		Client: github.NewClient(mockClient),
+	}
+	handler := serverTool.Handler(deps)
+
+	args := map[string]interface{}{
+		"method":       "get_comments",
+		"owner":        "owner",
+		"repo":         "repo",
+		"issue_number": 1,
+	}
+	request := createMCPRequest(args)
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError)
+
+	var returnedComments []*github.IssueComment
+	err = json.Unmarshal([]byte(getTextResult(t, result).Text), &returnedComments)
+	require.NoError(t, err)
+	require.Len(t, returnedComments, 1)
+	assert.Equal(t, "Hello <b>world</b>", *returnedComments[0].Body)
+
+	// 2. Verify GetSubIssues sanitizes Title and Body
+	mockSubIssues := []*github.Issue{
+		{
+			Number: github.Ptr(100),
+			Title:  github.Ptr("Malicious <script>alert('title')</script>Sub-Issue"),
+			Body:   github.Ptr("Malicious <script>alert('body')</script>Body"),
+			State:  github.Ptr("open"),
+			User: &github.User{
+				Login: github.Ptr("user1"),
+			},
+			HTMLURL: github.Ptr("https://github.com/owner/repo/issues/100"),
+		},
+	}
+	mockClient2 := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetReposIssuesSubIssuesByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, mockSubIssues),
+	})
+	deps2 := BaseDeps{
+		Client: github.NewClient(mockClient2),
+	}
+	handler2 := serverTool.Handler(deps2)
+
+	args2 := map[string]interface{}{
+		"method":       "get_sub_issues",
+		"owner":        "owner",
+		"repo":         "repo",
+		"issue_number": 1,
+	}
+	request2 := createMCPRequest(args2)
+	result2, err := handler2(ContextWithDeps(context.Background(), deps2), &request2)
+	require.NoError(t, err)
+	require.NotNil(t, result2)
+	require.False(t, result2.IsError)
+
+	var returnedSubIssues []*github.Issue
+	err = json.Unmarshal([]byte(getTextResult(t, result2).Text), &returnedSubIssues)
+	require.NoError(t, err)
+	require.Len(t, returnedSubIssues, 1)
+	assert.Equal(t, "Malicious Sub-Issue", *returnedSubIssues[0].Title)
+	assert.Equal(t, "Malicious Body", *returnedSubIssues[0].Body)
+
+	// 3. Verify SubIssueWrite ("add", "remove", "reprioritize") sanitizes Title and Body
+	subIssueWriteTool := SubIssueWrite(translations.NullTranslationHelper)
+
+	mockSingleSubIssue := &github.Issue{
+		Number: github.Ptr(100),
+		Title:  github.Ptr("Malicious <script>alert('title')</script>Sub-Issue"),
+		Body:   github.Ptr("Malicious <script>alert('body')</script>Body"),
+		State:  github.Ptr("open"),
+		User: &github.User{
+			Login: github.Ptr("user1"),
+		},
+		HTMLURL: github.Ptr("https://github.com/owner/repo/issues/100"),
+	}
+
+	// For Add method
+	mockClientAdd := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		PostReposIssuesSubIssuesByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusCreated, mockSingleSubIssue),
+	})
+	depsAdd := BaseDeps{
+		Client: github.NewClient(mockClientAdd),
+	}
+	writeHandlerAdd := subIssueWriteTool.Handler(depsAdd)
+	argsAdd := map[string]interface{}{
+		"method":       "add",
+		"owner":        "owner",
+		"repo":         "repo",
+		"issue_number": 1,
+		"sub_issue_id": 100,
+	}
+	requestAdd := createMCPRequest(argsAdd)
+	resultAdd, err := writeHandlerAdd(ContextWithDeps(context.Background(), depsAdd), &requestAdd)
+	require.NoError(t, err)
+	require.NotNil(t, resultAdd)
+	require.False(t, resultAdd.IsError)
+
+	var returnedAdd *github.Issue
+	err = json.Unmarshal([]byte(getTextResult(t, resultAdd).Text), &returnedAdd)
+	require.NoError(t, err)
+	assert.Equal(t, "Malicious Sub-Issue", *returnedAdd.Title)
+	assert.Equal(t, "Malicious Body", *returnedAdd.Body)
+
+	// For Remove method
+	mockClientRemove := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		DeleteReposIssuesSubIssueByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, mockSingleSubIssue),
+	})
+	depsRemove := BaseDeps{
+		Client: github.NewClient(mockClientRemove),
+	}
+	writeHandlerRemove := subIssueWriteTool.Handler(depsRemove)
+	argsRemove := map[string]interface{}{
+		"method":       "remove",
+		"owner":        "owner",
+		"repo":         "repo",
+		"issue_number": 1,
+		"sub_issue_id": 100,
+	}
+	requestRemove := createMCPRequest(argsRemove)
+	resultRemove, err := writeHandlerRemove(ContextWithDeps(context.Background(), depsRemove), &requestRemove)
+	require.NoError(t, err)
+	require.NotNil(t, resultRemove)
+	require.False(t, resultRemove.IsError)
+
+	var returnedRemove *github.Issue
+	err = json.Unmarshal([]byte(getTextResult(t, resultRemove).Text), &returnedRemove)
+	require.NoError(t, err)
+	assert.Equal(t, "Malicious Sub-Issue", *returnedRemove.Title)
+	assert.Equal(t, "Malicious Body", *returnedRemove.Body)
+
+	// For Reprioritize method
+	mockClientReprio := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		PatchReposIssuesSubIssuesPriorityByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, mockSingleSubIssue),
+	})
+	depsReprio := BaseDeps{
+		Client: github.NewClient(mockClientReprio),
+	}
+	writeHandlerReprio := subIssueWriteTool.Handler(depsReprio)
+	argsReprio := map[string]interface{}{
+		"method":       "reprioritize",
+		"owner":        "owner",
+		"repo":         "repo",
+		"issue_number": 1,
+		"sub_issue_id": 100,
+		"after_id":     99,
+	}
+	requestReprio := createMCPRequest(argsReprio)
+	resultReprio, err := writeHandlerReprio(ContextWithDeps(context.Background(), depsReprio), &requestReprio)
+	require.NoError(t, err)
+	require.NotNil(t, resultReprio)
+	require.False(t, resultReprio.IsError)
+
+	var returnedReprio *github.Issue
+	err = json.Unmarshal([]byte(getTextResult(t, resultReprio).Text), &returnedReprio)
+	require.NoError(t, err)
+	assert.Equal(t, "Malicious Sub-Issue", *returnedReprio.Title)
+	assert.Equal(t, "Malicious Body", *returnedReprio.Body)
+}
+
 func Test_AddIssueComment(t *testing.T) {
 	// Verify tool definition once
 	serverTool := AddIssueComment(translations.NullTranslationHelper)
