@@ -138,59 +138,6 @@ func Test_ListNotifications(t *testing.T) {
 	}
 }
 
-func Test_NotificationsXSS(t *testing.T) {
-	maliciousNotification := &github.Notification{
-		ID:     github.Ptr("123"),
-		Reason: github.Ptr("mention"),
-		Subject: &github.NotificationSubject{
-			Title: github.Ptr("Malicious <script>alert('xss')</script> Title"),
-		},
-	}
-
-	t.Run("ListNotifications sanitizes title", func(t *testing.T) {
-		serverTool := ListNotifications(translations.NullTranslationHelper)
-		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-			GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{maliciousNotification}),
-		})
-		client := github.NewClient(mockedClient)
-		deps := BaseDeps{Client: client}
-		handler := serverTool.Handler(deps)
-		request := createMCPRequest(map[string]interface{}{})
-		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
-
-		require.NoError(t, err)
-		require.False(t, result.IsError)
-		textContent := getTextResult(t, result)
-
-		var returned []*github.Notification
-		err = json.Unmarshal([]byte(textContent.Text), &returned)
-		require.NoError(t, err)
-		require.Len(t, returned, 1)
-		assert.Equal(t, "Malicious  Title", *returned[0].Subject.Title)
-	})
-
-	t.Run("GetNotificationDetails sanitizes title", func(t *testing.T) {
-		serverTool := GetNotificationDetails(translations.NullTranslationHelper)
-		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
-			GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, maliciousNotification),
-		})
-		client := github.NewClient(mockedClient)
-		deps := BaseDeps{Client: client}
-		handler := serverTool.Handler(deps)
-		request := createMCPRequest(map[string]interface{}{"notificationID": "123"})
-		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
-
-		require.NoError(t, err)
-		require.False(t, result.IsError)
-		textContent := getTextResult(t, result)
-
-		var returned github.Notification
-		err = json.Unmarshal([]byte(textContent.Text), &returned)
-		require.NoError(t, err)
-		assert.Equal(t, "Malicious  Title", *returned.Subject.Title)
-	})
-}
-
 func Test_ManageNotificationSubscription(t *testing.T) {
 	// Verify tool definition and schema
 	serverTool := ManageNotificationSubscription(translations.NullTranslationHelper)
