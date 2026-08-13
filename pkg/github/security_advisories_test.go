@@ -129,6 +129,51 @@ func Test_ListGlobalSecurityAdvisories(t *testing.T) {
 	}
 }
 
+func Test_SecurityAdvisoriesXSS(t *testing.T) {
+	// Setup mock advisory with malicious payload
+	mockAdvisory := &github.GlobalSecurityAdvisory{
+		SecurityAdvisory: github.SecurityAdvisory{
+			GHSAID:      github.Ptr("GHSA-xxxx-xxxx-xxxx"),
+			Summary:     github.Ptr("<script>alert('xss_summary')</script>Safe Summary <b>Bold</b>"),
+			Description: github.Ptr("<script>alert('xss_desc')</script>Safe Description <i>Italic</i>"),
+			Severity:    github.Ptr("high"),
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetAdvisoriesByGhsaID: mockResponse(t, http.StatusOK, mockAdvisory),
+	})
+
+	client := github.NewClient(mockedClient)
+	deps := BaseDeps{Client: client}
+	toolDef := GetGlobalSecurityAdvisory(translations.NullTranslationHelper)
+	handler := toolDef.Handler(deps)
+
+	request := createMCPRequest(map[string]interface{}{
+		"ghsaId": "GHSA-xxxx-xxxx-xxxx",
+	})
+
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+	require.NoError(t, err)
+
+	textContent := getTextResult(t, result)
+
+	var returnedAdvisory github.GlobalSecurityAdvisory
+	err = json.Unmarshal([]byte(textContent.Text), &returnedAdvisory)
+	require.NoError(t, err)
+
+	// Assert that malicious script tags are stripped, but safe tags/content are preserved
+	assert.NotContains(t, *returnedAdvisory.Summary, "<script>")
+	assert.NotContains(t, *returnedAdvisory.Summary, "alert('xss_summary')")
+	assert.Contains(t, *returnedAdvisory.Summary, "Safe Summary")
+	assert.Contains(t, *returnedAdvisory.Summary, "<b>Bold</b>")
+
+	assert.NotContains(t, *returnedAdvisory.Description, "<script>")
+	assert.NotContains(t, *returnedAdvisory.Description, "alert('xss_desc')")
+	assert.Contains(t, *returnedAdvisory.Description, "Safe Description")
+	assert.Contains(t, *returnedAdvisory.Description, "<i>Italic</i>")
+}
+
 func Test_GetGlobalSecurityAdvisory(t *testing.T) {
 	toolDef := GetGlobalSecurityAdvisory(translations.NullTranslationHelper)
 	tool := toolDef.Tool
