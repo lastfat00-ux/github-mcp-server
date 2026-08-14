@@ -183,6 +183,63 @@ func Test_ListGists(t *testing.T) {
 	}
 }
 
+func Test_GistsXSS(t *testing.T) {
+	// Setup mock gist with malicious and safe payloads in description
+	maliciousDescription := "Malicious <script>alert('XSS')</script><b>Safe</b>"
+	expectedSanitized := "Malicious <b>Safe</b>"
+
+	mockGist := github.Gist{
+		ID:          github.Ptr("gist1"),
+		Description: github.Ptr(maliciousDescription),
+		HTMLURL:     github.Ptr("https://gist.github.com/user/gist1"),
+	}
+
+	mockGists := []*github.Gist{&mockGist}
+
+	t.Run("ListGists sanitizes description", func(t *testing.T) {
+		serverTool := ListGists(translations.NullTranslationHelper)
+		client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetGists: mockResponse(t, http.StatusOK, mockGists),
+		}))
+		deps := BaseDeps{Client: client}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returnedGists []*github.Gist
+		err = json.Unmarshal([]byte(textContent.Text), &returnedGists)
+		require.NoError(t, err)
+
+		require.Len(t, returnedGists, 1)
+		assert.Equal(t, expectedSanitized, *returnedGists[0].Description)
+	})
+
+	t.Run("GetGist sanitizes description", func(t *testing.T) {
+		serverTool := GetGist(translations.NullTranslationHelper)
+		client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetGistsByGistID: mockResponse(t, http.StatusOK, mockGist),
+		}))
+		deps := BaseDeps{Client: client}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{"gist_id": "gist1"})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returnedGist github.Gist
+		err = json.Unmarshal([]byte(textContent.Text), &returnedGist)
+		require.NoError(t, err)
+
+		assert.Equal(t, expectedSanitized, *returnedGist.Description)
+	})
+}
+
 func Test_GetGist(t *testing.T) {
 	// Verify tool definition
 	serverTool := GetGist(translations.NullTranslationHelper)
