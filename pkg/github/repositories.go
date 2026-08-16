@@ -12,6 +12,7 @@ import (
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/octicons"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -1617,6 +1618,20 @@ func GetTag(t translations.TranslationHelperFunc) inventory.ServerTool {
 	)
 }
 
+// sanitizeRelease sanitizes the Name and Body fields of a repository release to prevent XSS
+// from untrusted user content (defense-in-depth protection for downstream clients).
+func sanitizeRelease(release *github.RepositoryRelease) {
+	if release == nil {
+		return
+	}
+	if release.Name != nil {
+		release.Name = github.Ptr(sanitize.Sanitize(*release.Name))
+	}
+	if release.Body != nil {
+		release.Body = github.Ptr(sanitize.Sanitize(*release.Body))
+	}
+}
+
 // ListReleases creates a tool to list releases in a GitHub repository.
 func ListReleases(t translations.TranslationHelperFunc) inventory.ServerTool {
 	return NewTool(
@@ -1680,6 +1695,10 @@ func ListReleases(t translations.TranslationHelperFunc) inventory.ServerTool {
 					return nil, nil, fmt.Errorf("failed to read response body: %w", err)
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list releases", resp, body), nil, nil
+			}
+
+			for _, release := range releases {
+				sanitizeRelease(release)
 			}
 
 			r, err := json.Marshal(releases)
@@ -1747,6 +1766,8 @@ func GetLatestRelease(t translations.TranslationHelperFunc) inventory.ServerTool
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get latest release", resp, body), nil, nil
 			}
+
+			sanitizeRelease(release)
 
 			r, err := json.Marshal(release)
 			if err != nil {
@@ -1824,6 +1845,8 @@ func GetReleaseByTag(t translations.TranslationHelperFunc) inventory.ServerTool 
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get release by tag", resp, body), nil, nil
 			}
+
+			sanitizeRelease(release)
 
 			r, err := json.Marshal(release)
 			if err != nil {
