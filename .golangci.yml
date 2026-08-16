@@ -1,3 +1,4 @@
+version: "2"
 run:
   concurrency: 4
   tests: true
@@ -15,14 +16,27 @@ linters:
     - govet
     - ineffassign
     - unused
-linters-settings:
-  staticcheck:
-    checks:
-      - "all"
-      - "-QF1008"
-      - "-ST1000"
-issues:
-  exclude-dirs:
-    - third_party
-    - builtin
-    - examples
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+  settings:
+    staticcheck:
+      checks:
+        - "all"
+        - -QF1008
+        - -ST1000
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
