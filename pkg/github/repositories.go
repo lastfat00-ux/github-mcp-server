@@ -12,6 +12,7 @@ import (
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/octicons"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -115,6 +116,22 @@ func GetCommit(t translations.TranslationHelperFunc) inventory.ServerTool {
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+// sanitizeRelease sanitizes untrusted user input in GitHub release name and body.
+// Defense in Depth: While clients are responsible for safe rendering, MCP servers
+// act as data providers to various downstream LLM applications that might render
+// raw release markdown or HTML directly.
+func sanitizeRelease(release *github.RepositoryRelease) {
+	if release == nil {
+		return
+	}
+	if release.Name != nil {
+		release.Name = github.Ptr(sanitize.Sanitize(*release.Name))
+	}
+	if release.Body != nil {
+		release.Body = github.Ptr(sanitize.Sanitize(*release.Body))
+	}
 }
 
 // ListCommits creates a tool to get commits of a branch in a repository.
@@ -1682,6 +1699,10 @@ func ListReleases(t translations.TranslationHelperFunc) inventory.ServerTool {
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list releases", resp, body), nil, nil
 			}
 
+			for _, release := range releases {
+				sanitizeRelease(release)
+			}
+
 			r, err := json.Marshal(releases)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -1747,6 +1768,8 @@ func GetLatestRelease(t translations.TranslationHelperFunc) inventory.ServerTool
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get latest release", resp, body), nil, nil
 			}
+
+			sanitizeRelease(release)
 
 			r, err := json.Marshal(release)
 			if err != nil {
@@ -1824,6 +1847,8 @@ func GetReleaseByTag(t translations.TranslationHelperFunc) inventory.ServerTool 
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get release by tag", resp, body), nil, nil
 			}
+
+			sanitizeRelease(release)
 
 			r, err := json.Marshal(release)
 			if err != nil {
