@@ -183,6 +183,61 @@ func Test_ListGists(t *testing.T) {
 	}
 }
 
+func Test_GistsXSS(t *testing.T) {
+	mockGist := &github.Gist{
+		ID:          github.Ptr("xss-gist"),
+		Description: github.Ptr("Gist description <script>alert('xss')</script> <img src=x onerror=alert(1)> safe text"),
+		HTMLURL:     github.Ptr("https://gist.github.com/user/xss-gist"),
+	}
+
+	t.Run("ListGists sanitizes description", func(t *testing.T) {
+		serverTool := ListGists(translations.NullTranslationHelper)
+		client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetGists: mockResponse(t, http.StatusOK, []*github.Gist{mockGist}),
+		}))
+		deps := BaseDeps{Client: client}
+		handler := serverTool.Handler(deps)
+
+		request := createMCPRequest(map[string]interface{}{})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returnedGists []*github.Gist
+		err = json.Unmarshal([]byte(textContent.Text), &returnedGists)
+		require.NoError(t, err)
+
+		require.Len(t, returnedGists, 1)
+		assert.NotContains(t, *returnedGists[0].Description, "<script>")
+		assert.NotContains(t, *returnedGists[0].Description, "onerror=")
+		assert.Contains(t, *returnedGists[0].Description, "safe text")
+	})
+
+	t.Run("GetGist sanitizes description", func(t *testing.T) {
+		serverTool := GetGist(translations.NullTranslationHelper)
+		client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetGistsByGistID: mockResponse(t, http.StatusOK, mockGist),
+		}))
+		deps := BaseDeps{Client: client}
+		handler := serverTool.Handler(deps)
+
+		request := createMCPRequest(map[string]interface{}{"gist_id": "xss-gist"})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returnedGist github.Gist
+		err = json.Unmarshal([]byte(textContent.Text), &returnedGist)
+		require.NoError(t, err)
+
+		assert.NotContains(t, *returnedGist.Description, "<script>")
+		assert.NotContains(t, *returnedGist.Description, "onerror=")
+		assert.Contains(t, *returnedGist.Description, "safe text")
+	})
+}
+
 func Test_GetGist(t *testing.T) {
 	// Verify tool definition
 	serverTool := GetGist(translations.NullTranslationHelper)
