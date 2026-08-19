@@ -1844,6 +1844,32 @@ func Test_GetIssueComments(t *testing.T) {
 			expectedComments: mockComments,
 		},
 		{
+			name: "comments retrieval with XSS sanitization",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, []*github.IssueComment{
+					{
+						ID:   github.Ptr(int64(789)),
+						Body: github.Ptr("Comment with <script>alert('xss')</script> malicious tag"),
+						User: &github.User{Login: github.Ptr("user3")},
+					},
+				}),
+			}),
+			requestArgs: map[string]interface{}{
+				"method":       "get_comments",
+				"owner":        "owner",
+				"repo":         "repo",
+				"issue_number": float64(42),
+			},
+			expectError: false,
+			expectedComments: []*github.IssueComment{
+				{
+					ID:   github.Ptr(int64(789)),
+					Body: github.Ptr("Comment with  malicious tag"),
+					User: &github.User{Login: github.Ptr("user3")},
+				},
+			},
+		},
+		{
 			name: "successful comments retrieval with pagination",
 			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
 				GetReposIssuesCommentsByOwnerByRepoByIssueNumber: expectQueryParams(t, map[string]string{
