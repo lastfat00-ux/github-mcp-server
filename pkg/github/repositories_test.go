@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/github/github-mcp-server/internal/toolsnaps"
+	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/raw"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -399,6 +400,92 @@ func Test_GetFileContents(t *testing.T) {
 				textContent := getErrorResult(t, result)
 				require.Equal(t, textContent, expected)
 			}
+		})
+	}
+}
+
+func Test_ReleasesXSS(t *testing.T) {
+	tests := []struct {
+		name         string
+		serverTool   inventory.ServerTool
+		mockedClient *http.Client
+		requestArgs  map[string]interface{}
+	}{
+		{
+			name:       "ListReleases sanitizes HTML/JS",
+			serverTool: ListReleases(translations.NullTranslationHelper),
+			mockedClient: NewMockedHTTPClient(
+				WithRequestMatchHandler(
+					GetReposReleasesByOwnerByRepo,
+					http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+						w.WriteHeader(http.StatusOK)
+						_, _ = w.Write([]byte(`[{
+							"id": 1,
+							"name": "Release <b>1.0</b><script>alert('xss')</script>",
+							"body": "Description <img src=x onerror=alert('xss')> with <code>code</code>"
+						}]`))
+					}),
+				),
+			),
+			requestArgs: map[string]interface{}{"owner": "owner", "repo": "repo"},
+		},
+		{
+			name:       "GetLatestRelease sanitizes HTML/JS",
+			serverTool: GetLatestRelease(translations.NullTranslationHelper),
+			mockedClient: NewMockedHTTPClient(
+				WithRequestMatchHandler(
+					GetReposReleasesLatestByOwnerByRepo,
+					http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+						w.WriteHeader(http.StatusOK)
+						_, _ = w.Write([]byte(`{
+							"id": 2,
+							"name": "Latest Release<script>alert('xss')</script>",
+							"body": "Body <iframe src='javascript:alert(1)'></iframe><b>safe</b>"
+						}`))
+					}),
+				),
+			),
+			requestArgs: map[string]interface{}{"owner": "owner", "repo": "repo"},
+		},
+		{
+			name:       "GetReleaseByTag sanitizes HTML/JS",
+			serverTool: GetReleaseByTag(translations.NullTranslationHelper),
+			mockedClient: NewMockedHTTPClient(
+				WithRequestMatchHandler(
+					GetReposReleasesTagsByOwnerByRepoByTag,
+					http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+						w.WriteHeader(http.StatusOK)
+						_, _ = w.Write([]byte(`{
+							"id": 3,
+							"name": "Tag Release<script>alert('xss')</script>",
+							"body": "Tag body <a href='javascript:alert(1)'>click</a><b>ok</b>"
+						}`))
+					}),
+				),
+			),
+			requestArgs: map[string]interface{}{"owner": "owner", "repo": "repo", "tag": "v1.0.0"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := github.NewClient(tt.mockedClient)
+			deps := BaseDeps{
+				Client: client,
+			}
+
+			handler := tt.serverTool.Handler(deps)
+			request := createMCPRequest(tt.requestArgs)
+
+			result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			textContent := getTextResult(t, result)
+			assert.NotContains(t, textContent.Text, "<script>")
+			assert.NotContains(t, textContent.Text, "onerror=")
+			assert.NotContains(t, textContent.Text, "javascript:")
+			assert.Contains(t, textContent.Text, "\\u003cb\\u003e")
 		})
 	}
 }
