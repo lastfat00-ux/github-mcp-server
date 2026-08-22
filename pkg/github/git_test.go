@@ -175,3 +175,43 @@ func Test_GetRepositoryTree(t *testing.T) {
 		})
 	}
 }
+
+func Test_CommitMessageXSS(t *testing.T) {
+	mockCommit := &github.RepositoryCommit{
+		SHA: github.Ptr("abc123def456"),
+		Commit: &github.Commit{
+			Message: github.Ptr("Fix bug <script>alert('xss')</script> in <b>core</b> module"),
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetReposCommitsByOwnerByRepoByRef: mockResponse(t, http.StatusOK, mockCommit),
+	})
+
+	client := github.NewClient(mockedClient)
+	deps := BaseDeps{
+		Client: client,
+	}
+
+	serverTool := GetCommit(translations.NullTranslationHelper)
+	handler := serverTool.Handler(deps)
+	request := createMCPRequest(map[string]interface{}{
+		"owner": "owner",
+		"repo":  "repo",
+		"sha":   "abc123def456",
+	})
+
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+
+	textContent := getTextResult(t, result)
+	var returnedCommit MinimalCommit
+	err = json.Unmarshal([]byte(textContent.Text), &returnedCommit)
+	require.NoError(t, err)
+
+	require.NotNil(t, returnedCommit.Commit)
+	assert.NotContains(t, returnedCommit.Commit.Message, "<script>")
+	assert.NotContains(t, returnedCommit.Commit.Message, "</script>")
+	assert.Contains(t, returnedCommit.Commit.Message, "<b>core</b>")
+}
