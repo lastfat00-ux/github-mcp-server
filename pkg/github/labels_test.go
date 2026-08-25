@@ -71,6 +71,44 @@ func TestGetLabel(t *testing.T) {
 			expectToolError: false,
 		},
 		{
+			name: "sanitizes malicious script in description",
+			requestArgs: map[string]any{
+				"owner": "owner",
+				"repo":  "repo",
+				"name":  "bug",
+			},
+			mockedClient: githubv4mock.NewMockedHTTPClient(
+				githubv4mock.NewQueryMatcher(
+					struct {
+						Repository struct {
+							Label struct {
+								ID          githubv4.ID
+								Name        githubv4.String
+								Color       githubv4.String
+								Description githubv4.String
+							} `graphql:"label(name: $name)"`
+						} `graphql:"repository(owner: $owner, name: $repo)"`
+					}{},
+					map[string]any{
+						"owner": githubv4.String("owner"),
+						"repo":  githubv4.String("repo"),
+						"name":  githubv4.String("bug"),
+					},
+					githubv4mock.DataResponse(map[string]any{
+						"repository": map[string]any{
+							"label": map[string]any{
+								"id":          githubv4.ID("test-label-id"),
+								"name":        githubv4.String("bug"),
+								"color":       githubv4.String("d73a4a"),
+								"description": githubv4.String("Something <script>alert('xss')</script>is wrong"),
+							},
+						},
+					}),
+				),
+			),
+			expectToolError: false,
+		},
+		{
 			name: "label not found",
 			requestArgs: map[string]any{
 				"owner": "owner",
@@ -157,6 +195,50 @@ func TestListLabels(t *testing.T) {
 		expectToolError    bool
 		expectedToolErrMsg string
 	}{
+		{
+			name: "sanitizes malicious script in label listing description",
+			requestArgs: map[string]any{
+				"owner": "owner",
+				"repo":  "repo",
+			},
+			mockedClient: githubv4mock.NewMockedHTTPClient(
+				githubv4mock.NewQueryMatcher(
+					struct {
+						Repository struct {
+							Labels struct {
+								Nodes []struct {
+									ID          githubv4.ID
+									Name        githubv4.String
+									Color       githubv4.String
+									Description githubv4.String
+								}
+								TotalCount githubv4.Int
+							} `graphql:"labels(first: 100)"`
+						} `graphql:"repository(owner: $owner, name: $repo)"`
+					}{},
+					map[string]any{
+						"owner": githubv4.String("owner"),
+						"repo":  githubv4.String("repo"),
+					},
+					githubv4mock.DataResponse(map[string]any{
+						"repository": map[string]any{
+							"labels": map[string]any{
+								"nodes": []any{
+									map[string]any{
+										"id":          githubv4.ID("label-1"),
+										"name":        githubv4.String("bug"),
+										"color":       githubv4.String("d73a4a"),
+										"description": githubv4.String("Description <script>alert(1)</script>"),
+									},
+								},
+								"totalCount": githubv4.Int(1),
+							},
+						},
+					}),
+				),
+			),
+			expectToolError: false,
+		},
 		{
 			name: "successful repository labels listing",
 			requestArgs: map[string]any{

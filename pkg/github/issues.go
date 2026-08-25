@@ -209,9 +209,10 @@ func fragmentToIssue(fragment IssueFragment) *github.Issue {
 	var foundLabels []*github.Label
 	for _, labelNode := range fragment.Labels.Nodes {
 		foundLabels = append(foundLabels, &github.Label{
-			Name:        github.Ptr(string(labelNode.Name)),
-			NodeID:      github.Ptr(string(labelNode.ID)),
-			Description: github.Ptr(string(labelNode.Description)),
+			Name:   github.Ptr(string(labelNode.Name)),
+			NodeID: github.Ptr(string(labelNode.ID)),
+			// Sanitize label description to prevent XSS from untrusted user content (Defense in Depth)
+			Description: github.Ptr(sanitize.Sanitize(string(labelNode.Description))),
 		})
 	}
 
@@ -524,10 +525,11 @@ func GetIssueLabels(ctx context.Context, client *githubv4.Client, owner string, 
 	issueLabels := make([]map[string]any, len(query.Repository.Issue.Labels.Nodes))
 	for i, label := range query.Repository.Issue.Labels.Nodes {
 		issueLabels[i] = map[string]any{
-			"id":          fmt.Sprintf("%v", label.ID),
-			"name":        string(label.Name),
-			"color":       string(label.Color),
-			"description": string(label.Description),
+			"id":    fmt.Sprintf("%v", label.ID),
+			"name":  string(label.Name),
+			"color": string(label.Color),
+			// Sanitize label description to prevent XSS from untrusted user content (Defense in Depth)
+			"description": sanitize.Sanitize(string(label.Description)),
 		}
 	}
 
