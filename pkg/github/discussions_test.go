@@ -533,6 +533,97 @@ func Test_DiscussionSanitization(t *testing.T) {
 
 		assert.Equal(t, "Malicious  Title", out["title"])
 		assert.Equal(t, "Malicious  Body", out["body"])
+		category, ok := out["category"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "General", category["name"])
+	})
+
+	t.Run("GetDiscussion category name sanitization", func(t *testing.T) {
+		toolDef := GetDiscussion(translations.NullTranslationHelper)
+		qGetDiscussion := "query($discussionNumber:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){number,title,body,createdAt,closed,isAnswered,answerChosenAt,url,category{name}}}}"
+		vars := map[string]interface{}{
+			"owner":            "owner",
+			"repo":             "repo",
+			"discussionNumber": float64(1),
+		}
+
+		maliciousResponse := githubv4mock.DataResponse(map[string]any{
+			"repository": map[string]any{"discussion": map[string]any{
+				"number":     1,
+				"title":      "Safe Title",
+				"body":       "Safe Body",
+				"url":        "https://github.com/owner/repo/discussions/1",
+				"createdAt":  "2025-04-25T12:00:00Z",
+				"closed":     false,
+				"isAnswered": false,
+				"category":   map[string]any{"name": "Malicious <script>alert('xss')</script> Category"},
+			}},
+		})
+
+		matcher := githubv4mock.NewQueryMatcher(qGetDiscussion, vars, maliciousResponse)
+		httpClient := githubv4mock.NewMockedHTTPClient(matcher)
+		gqlClient := githubv4.NewClient(httpClient)
+		deps := BaseDeps{GQLClient: gqlClient}
+		handler := toolDef.Handler(deps)
+
+		reqParams := map[string]interface{}{"owner": "owner", "repo": "repo", "discussionNumber": int32(1)}
+		req := createMCPRequest(reqParams)
+		res, err := handler(ContextWithDeps(context.Background(), deps), &req)
+		require.NoError(t, err)
+
+		text := getTextResult(t, res).Text
+		var out map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(text), &out))
+
+		category, ok := out["category"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "Malicious  Category", category["name"])
+	})
+
+	t.Run("ListDiscussionCategories sanitization", func(t *testing.T) {
+		toolDef := ListDiscussionCategories(translations.NullTranslationHelper)
+		qListCategories := "query($first:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussionCategories(first: $first){nodes{id,name},pageInfo{hasNextPage,hasPreviousPage,startCursor,endCursor},totalCount}}}"
+		vars := map[string]interface{}{
+			"owner": "owner",
+			"repo":  "repo",
+			"first": float64(25),
+		}
+
+		maliciousResponse := githubv4mock.DataResponse(map[string]any{
+			"repository": map[string]any{
+				"discussionCategories": map[string]any{
+					"nodes": []map[string]any{
+						{"id": "123", "name": "Malicious <script>alert('xss')</script> Category"},
+					},
+					"pageInfo": map[string]any{
+						"hasNextPage":     false,
+						"hasPreviousPage": false,
+						"startCursor":     "",
+						"endCursor":       "",
+					},
+					"totalCount": 1,
+				},
+			},
+		})
+
+		matcher := githubv4mock.NewQueryMatcher(qListCategories, vars, maliciousResponse)
+		httpClient := githubv4mock.NewMockedHTTPClient(matcher)
+		gqlClient := githubv4.NewClient(httpClient)
+		deps := BaseDeps{GQLClient: gqlClient}
+		handler := toolDef.Handler(deps)
+
+		reqParams := map[string]interface{}{"owner": "owner", "repo": "repo"}
+		req := createMCPRequest(reqParams)
+		res, err := handler(ContextWithDeps(context.Background(), deps), &req)
+		require.NoError(t, err)
+
+		text := getTextResult(t, res).Text
+		var response struct {
+			Categories []map[string]string `json:"categories"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(text), &response))
+		assert.Len(t, response.Categories, 1)
+		assert.Equal(t, "Malicious  Category", response.Categories[0]["name"])
 	})
 
 	t.Run("GetDiscussionComments sanitization", func(t *testing.T) {
