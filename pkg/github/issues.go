@@ -523,11 +523,12 @@ func GetIssueLabels(ctx context.Context, client *githubv4.Client, owner string, 
 	// Extract label information
 	issueLabels := make([]map[string]any, len(query.Repository.Issue.Labels.Nodes))
 	for i, label := range query.Repository.Issue.Labels.Nodes {
+		// Apply Defense in Depth XSS sanitization to protect downstream LLM-based clients that render markdown/HTML directly.
 		issueLabels[i] = map[string]any{
 			"id":          fmt.Sprintf("%v", label.ID),
-			"name":        string(label.Name),
+			"name":        sanitize.Sanitize(string(label.Name)),
 			"color":       string(label.Color),
-			"description": string(label.Description),
+			"description": sanitize.Sanitize(string(label.Description)),
 		}
 	}
 
