@@ -512,7 +512,7 @@ func Test_DiscussionSanitization(t *testing.T) {
 				"createdAt":  "2025-04-25T12:00:00Z",
 				"closed":     false,
 				"isAnswered": false,
-				"category":   map[string]any{"name": "General"},
+				"category":   map[string]any{"name": "General <script>alert('xss')</script>"},
 			}},
 		})
 
@@ -533,6 +533,113 @@ func Test_DiscussionSanitization(t *testing.T) {
 
 		assert.Equal(t, "Malicious  Title", out["title"])
 		assert.Equal(t, "Malicious  Body", out["body"])
+		category, ok := out["category"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "General ", category["name"])
+	})
+
+	t.Run("ListDiscussions category sanitization", func(t *testing.T) {
+		toolDef := ListDiscussions(translations.NullTranslationHelper)
+		qBasicNoOrder := "query($after:String$first:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussions(first: $first, after: $after){nodes{number,title,createdAt,updatedAt,closed,isAnswered,answerChosenAt,author{login},category{name},url},pageInfo{hasNextPage,hasPreviousPage,startCursor,endCursor},totalCount}}}"
+		vars := map[string]interface{}{
+			"owner": "owner",
+			"repo":  "repo",
+			"first": float64(30),
+			"after": (*string)(nil),
+		}
+
+		maliciousResponse := githubv4mock.DataResponse(map[string]any{
+			"repository": map[string]any{
+				"discussions": map[string]any{
+					"nodes": []map[string]any{
+						{
+							"number":     1,
+							"title":      "Discussion 1",
+							"createdAt":  "2023-01-01T00:00:00Z",
+							"updatedAt":  "2023-01-01T00:00:00Z",
+							"closed":     false,
+							"isAnswered": false,
+							"author":     map[string]any{"login": "user1"},
+							"url":        "https://github.com/owner/repo/discussions/1",
+							"category":   map[string]any{"name": "Category <script>alert('xss')</script>"},
+						},
+					},
+					"pageInfo": map[string]any{
+						"hasNextPage":     false,
+						"hasPreviousPage": false,
+						"startCursor":     "",
+						"endCursor":       "",
+					},
+					"totalCount": 1,
+				},
+			},
+		})
+
+		matcher := githubv4mock.NewQueryMatcher(qBasicNoOrder, vars, maliciousResponse)
+		httpClient := githubv4mock.NewMockedHTTPClient(matcher)
+		gqlClient := githubv4.NewClient(httpClient)
+		deps := BaseDeps{GQLClient: gqlClient}
+		handler := toolDef.Handler(deps)
+
+		reqParams := map[string]interface{}{"owner": "owner", "repo": "repo"}
+		req := createMCPRequest(reqParams)
+		res, err := handler(ContextWithDeps(context.Background(), deps), &req)
+		require.NoError(t, err)
+
+		text := getTextResult(t, res).Text
+		var response struct {
+			Discussions []*github.Discussion `json:"discussions"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(text), &response))
+		require.Len(t, response.Discussions, 1)
+		require.NotNil(t, response.Discussions[0].DiscussionCategory)
+		assert.Equal(t, "Category ", *response.Discussions[0].DiscussionCategory.Name)
+	})
+
+	t.Run("ListDiscussionCategories sanitization", func(t *testing.T) {
+		toolDef := ListDiscussionCategories(translations.NullTranslationHelper)
+		qListCategories := "query($first:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussionCategories(first: $first){nodes{id,name},pageInfo{hasNextPage,hasPreviousPage,startCursor,endCursor},totalCount}}}"
+		vars := map[string]interface{}{
+			"owner": "owner",
+			"repo":  "repo",
+			"first": float64(25),
+		}
+
+		maliciousResponse := githubv4mock.DataResponse(map[string]any{
+			"repository": map[string]any{
+				"discussionCategories": map[string]any{
+					"nodes": []map[string]any{
+						{"id": "123", "name": "Malicious <script>alert('xss')</script> Category"},
+					},
+					"pageInfo": map[string]any{
+						"hasNextPage":     false,
+						"hasPreviousPage": false,
+						"startCursor":     "",
+						"endCursor":       "",
+					},
+					"totalCount": 1,
+				},
+			},
+		})
+
+		matcher := githubv4mock.NewQueryMatcher(qListCategories, vars, maliciousResponse)
+		httpClient := githubv4mock.NewMockedHTTPClient(matcher)
+		gqlClient := githubv4.NewClient(httpClient)
+		deps := BaseDeps{GQLClient: gqlClient}
+		handler := toolDef.Handler(deps)
+
+		reqParams := map[string]interface{}{"owner": "owner", "repo": "repo"}
+		req := createMCPRequest(reqParams)
+		res, err := handler(ContextWithDeps(context.Background(), deps), &req)
+		require.NoError(t, err)
+
+		text := getTextResult(t, res).Text
+		var response struct {
+			Categories []map[string]string `json:"categories"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(text), &response))
+		require.Len(t, response.Categories, 1)
+		assert.Equal(t, "Malicious  Category", response.Categories[0]["name"])
 	})
 
 	t.Run("GetDiscussionComments sanitization", func(t *testing.T) {
