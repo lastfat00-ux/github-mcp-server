@@ -98,7 +98,7 @@ type WithCategoryNoOrder struct {
 func fragmentToDiscussion(fragment NodeFragment) *github.Discussion {
 	return &github.Discussion{
 		Number: github.Ptr(int(fragment.Number)),
-		// Sanitize title to prevent XSS from untrusted user content
+		// Sanitize title and category name to prevent XSS from untrusted user content
 		Title:     github.Ptr(sanitize.Sanitize(string(fragment.Title))),
 		HTMLURL:   github.Ptr(string(fragment.URL)),
 		CreatedAt: &github.Timestamp{Time: fragment.CreatedAt.Time},
@@ -107,7 +107,7 @@ func fragmentToDiscussion(fragment NodeFragment) *github.Discussion {
 			Login: github.Ptr(string(fragment.Author.Login)),
 		},
 		DiscussionCategory: &github.DiscussionCategory{
-			Name: github.Ptr(string(fragment.Category.Name)),
+			Name: github.Ptr(sanitize.Sanitize(string(fragment.Category.Name))),
 		},
 	}
 }
@@ -356,7 +356,7 @@ func GetDiscussion(t translations.TranslationHelperFunc) inventory.ServerTool {
 			// like ListDiscussions and GetDiscussionComments).
 			response := map[string]interface{}{
 				"number": int(d.Number),
-				// Sanitize title and body to prevent XSS from untrusted user content
+				// Sanitize title, body, and category name to prevent XSS from untrusted user content
 				"title":      sanitize.Sanitize(string(d.Title)),
 				"body":       sanitize.Sanitize(string(d.Body)),
 				"url":        string(d.URL),
@@ -364,7 +364,7 @@ func GetDiscussion(t translations.TranslationHelperFunc) inventory.ServerTool {
 				"isAnswered": bool(d.IsAnswered),
 				"createdAt":  d.CreatedAt.Time,
 				"category": map[string]interface{}{
-					"name": string(d.Category.Name),
+					"name": sanitize.Sanitize(string(d.Category.Name)),
 				},
 			}
 
@@ -587,7 +587,7 @@ func ListDiscussionCategories(t translations.TranslationHelperFunc) inventory.Se
 			for _, c := range q.Repository.DiscussionCategories.Nodes {
 				categories = append(categories, map[string]string{
 					"id":   fmt.Sprint(c.ID),
-					"name": string(c.Name),
+					"name": sanitize.Sanitize(string(c.Name)),
 				})
 			}
 

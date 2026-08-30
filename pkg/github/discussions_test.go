@@ -535,6 +535,52 @@ func Test_DiscussionSanitization(t *testing.T) {
 		assert.Equal(t, "Malicious  Body", out["body"])
 	})
 
+	t.Run("Discussion category name sanitization", func(t *testing.T) {
+		toolDef := ListDiscussionCategories(translations.NullTranslationHelper)
+		qListCategories := "query($first:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussionCategories(first: $first){nodes{id,name},pageInfo{hasNextPage,hasPreviousPage,startCursor,endCursor},totalCount}}}"
+		vars := map[string]interface{}{
+			"owner": "owner",
+			"repo":  "repo",
+			"first": float64(25),
+		}
+
+		maliciousResponse := githubv4mock.DataResponse(map[string]any{
+			"repository": map[string]any{
+				"discussionCategories": map[string]any{
+					"nodes": []map[string]any{
+						{"id": "123", "name": "Malicious <script>alert('xss')</script> Category"},
+					},
+					"pageInfo": map[string]any{
+						"hasNextPage":     false,
+						"hasPreviousPage": false,
+						"startCursor":     "",
+						"endCursor":       "",
+					},
+					"totalCount": 1,
+				},
+			},
+		})
+
+		matcher := githubv4mock.NewQueryMatcher(qListCategories, vars, maliciousResponse)
+		httpClient := githubv4mock.NewMockedHTTPClient(matcher)
+		gqlClient := githubv4.NewClient(httpClient)
+		deps := BaseDeps{GQLClient: gqlClient}
+		handler := toolDef.Handler(deps)
+
+		reqParams := map[string]interface{}{"owner": "owner", "repo": "repo"}
+		req := createMCPRequest(reqParams)
+		res, err := handler(ContextWithDeps(context.Background(), deps), &req)
+		require.NoError(t, err)
+
+		text := getTextResult(t, res).Text
+		var response struct {
+			Categories []map[string]string `json:"categories"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(text), &response))
+		assert.Len(t, response.Categories, 1)
+		assert.Equal(t, "Malicious  Category", response.Categories[0]["name"])
+	})
+
 	t.Run("GetDiscussionComments sanitization", func(t *testing.T) {
 		toolDef := GetDiscussionComments(translations.NullTranslationHelper)
 		qGetComments := "query($after:String$discussionNumber:Int!$first:Int!$owner:String!$repo:String!){repository(owner: $owner, name: $repo){discussion(number: $discussionNumber){comments(first: $first, after: $after){nodes{body},pageInfo{hasNextPage,hasPreviousPage,startCursor,endCursor},totalCount}}}}"
