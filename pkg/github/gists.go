@@ -9,6 +9,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -94,6 +95,14 @@ func ListGists(t translations.TranslationHelperFunc) inventory.ServerTool {
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list gists", resp, body), nil, nil
 			}
 
+			// Sanitize gist description as defense in depth to protect downstream LLM-based clients
+			// that render markdown/HTML directly from untrusted external user content.
+			for _, gist := range gists {
+				if gist != nil && gist.Description != nil {
+					gist.Description = github.Ptr(sanitize.Sanitize(*gist.Description))
+				}
+			}
+
 			r, err := json.Marshal(gists)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal response", err), nil, nil
@@ -150,6 +159,12 @@ func GetGist(t translations.TranslationHelperFunc) inventory.ServerTool {
 					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, nil
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get gist", resp, body), nil, nil
+			}
+
+			// Sanitize gist description as defense in depth to protect downstream LLM-based clients
+			// that render markdown/HTML directly from untrusted external user content.
+			if gist != nil && gist.Description != nil {
+				gist.Description = github.Ptr(sanitize.Sanitize(*gist.Description))
 			}
 
 			r, err := json.Marshal(gist)
