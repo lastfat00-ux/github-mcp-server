@@ -585,9 +585,10 @@ func ListDiscussionCategories(t translations.TranslationHelperFunc) inventory.Se
 
 			var categories []map[string]string
 			for _, c := range q.Repository.DiscussionCategories.Nodes {
+				// Sanitize category name to prevent XSS from untrusted user content
 				categories = append(categories, map[string]string{
 					"id":   fmt.Sprint(c.ID),
-					"name": string(c.Name),
+					"name": sanitize.Sanitize(string(c.Name)),
 				})
 			}
 
