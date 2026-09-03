@@ -424,6 +424,14 @@ func GetIssueComments(ctx context.Context, client *github.Client, cache *lockdow
 		comments = filteredComments
 	}
 
+	// Sanitize comment bodies on response using pkg/sanitize.Sanitize as Defense in Depth
+	// to protect downstream LLM clients and consumers that render HTML/Markdown directly from XSS and invisible control characters.
+	for _, comment := range comments {
+		if comment != nil && comment.Body != nil {
+			comment.Body = github.Ptr(sanitize.Sanitize(*comment.Body))
+		}
+	}
+
 	r, err := json.Marshal(comments)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
