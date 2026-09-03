@@ -358,6 +358,61 @@ func Test_GetIssue(t *testing.T) {
 	}
 }
 
+func Test_GetIssueCommentsXSS(t *testing.T) {
+	serverTool := IssueRead(translations.NullTranslationHelper)
+
+	mockComments := []*github.IssueComment{
+		{
+			ID:   github.Ptr(int64(101)),
+			Body: github.Ptr("<script>alert('xss')</script><b>Safe comment</b>\n```go\nfmt.Println(\"hello\")\n```"),
+			User: &github.User{Login: github.Ptr("attacker")},
+		},
+		{
+			ID:   github.Ptr(int64(102)),
+			Body: github.Ptr("<img src=x onerror=alert(1)>Hello world"),
+			User: &github.User{Login: github.Ptr("user1")},
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, mockComments),
+	})
+
+	client := github.NewClient(mockedClient)
+	gqlClient := githubv4.NewClient(nil)
+	deps := BaseDeps{
+		Client:          client,
+		GQLClient:       gqlClient,
+		RepoAccessCache: stubRepoAccessCache(gqlClient, 15*time.Minute),
+		Flags:           stubFeatureFlags(map[string]bool{"lockdown-mode": false}),
+	}
+	handler := serverTool.Handler(deps)
+
+	request := createMCPRequest(map[string]interface{}{
+		"method":       "get_comments",
+		"owner":        "owner",
+		"repo":         "repo",
+		"issue_number": float64(42),
+	})
+
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+
+	textContent := getTextResult(t, result)
+	var returnedComments []*github.IssueComment
+	err = json.Unmarshal([]byte(textContent.Text), &returnedComments)
+	require.NoError(t, err)
+	require.Len(t, returnedComments, 2)
+
+	assert.NotContains(t, *returnedComments[0].Body, "<script>")
+	assert.Contains(t, *returnedComments[0].Body, "<b>Safe comment</b>")
+	assert.Contains(t, *returnedComments[0].Body, "```go")
+
+	assert.NotContains(t, *returnedComments[1].Body, "onerror")
+	assert.Contains(t, *returnedComments[1].Body, "Hello world")
+}
+
 func Test_AddIssueComment(t *testing.T) {
 	// Verify tool definition once
 	serverTool := AddIssueComment(translations.NullTranslationHelper)
