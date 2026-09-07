@@ -1911,6 +1911,36 @@ func Test_GetIssueComments(t *testing.T) {
 			},
 			lockdownEnabled: true,
 		},
+		{
+			name: "sanitizes malicious script tags and event attributes in comment body",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, []*github.IssueComment{
+					{
+						ID:   github.Ptr(int64(999)),
+						Body: github.Ptr("Comment with <script>alert('xss')</script> and <img src=x onerror=alert(1)> and <b>safe html</b>"),
+						User: &github.User{
+							Login: github.Ptr("attacker"),
+						},
+					},
+				}),
+			}),
+			requestArgs: map[string]interface{}{
+				"method":       "get_comments",
+				"owner":        "owner",
+				"repo":         "repo",
+				"issue_number": float64(42),
+			},
+			expectError: false,
+			expectedComments: []*github.IssueComment{
+				{
+					ID:   github.Ptr(int64(999)),
+					Body: github.Ptr("Comment with  and <img src=\"x\"> and <b>safe html</b>"),
+					User: &github.User{
+						Login: github.Ptr("attacker"),
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
