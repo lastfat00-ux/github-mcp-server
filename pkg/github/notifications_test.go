@@ -138,6 +138,50 @@ func Test_ListNotifications(t *testing.T) {
 	}
 }
 
+func Test_NotificationsXSS(t *testing.T) {
+	mockNotification := &github.Notification{
+		ID:     github.Ptr("123"),
+		Reason: github.Ptr("mention"),
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr("<script>alert('xss')</script>Safe Title"),
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetNotifications:                  mockResponse(t, http.StatusOK, []*github.Notification{mockNotification}),
+		GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, mockNotification),
+	})
+
+	client := github.NewClient(mockedClient)
+	deps := BaseDeps{Client: client}
+
+	t.Run("ListNotifications sanitizes subject title", func(t *testing.T) {
+		serverTool := ListNotifications(translations.NullTranslationHelper)
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		assert.NotContains(t, textContent.Text, "<script>")
+		assert.Contains(t, textContent.Text, "Safe Title")
+	})
+
+	t.Run("GetNotificationDetails sanitizes subject title", func(t *testing.T) {
+		serverTool := GetNotificationDetails(translations.NullTranslationHelper)
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{"notificationID": "123"})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		assert.NotContains(t, textContent.Text, "<script>")
+		assert.Contains(t, textContent.Text, "Safe Title")
+	})
+}
+
 func Test_ManageNotificationSubscription(t *testing.T) {
 	// Verify tool definition and schema
 	serverTool := ManageNotificationSubscription(translations.NullTranslationHelper)
