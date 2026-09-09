@@ -1911,6 +1911,32 @@ func Test_GetIssueComments(t *testing.T) {
 			},
 			lockdownEnabled: true,
 		},
+		{
+			name: "invisible control characters are filtered from issue comments",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, []*github.IssueComment{
+					{
+						ID:   github.Ptr(int64(101)),
+						Body: github.Ptr("Hello \u200B\u200CWorld \u202Ahidden\u202C text"),
+						User: &github.User{Login: github.Ptr("testuser")},
+					},
+				}),
+			}),
+			requestArgs: map[string]interface{}{
+				"method":       "get_comments",
+				"owner":        "owner",
+				"repo":         "repo",
+				"issue_number": float64(42),
+			},
+			expectError: false,
+			expectedComments: []*github.IssueComment{
+				{
+					ID:   github.Ptr(int64(101)),
+					Body: github.Ptr("Hello World hidden text"),
+					User: &github.User{Login: github.Ptr("testuser")},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
