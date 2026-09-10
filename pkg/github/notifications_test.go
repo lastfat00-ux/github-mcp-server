@@ -138,6 +138,55 @@ func Test_ListNotifications(t *testing.T) {
 	}
 }
 
+func Test_NotificationsXSS(t *testing.T) {
+	maliciousNotification := &github.Notification{
+		ID: github.Ptr("456"),
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr("<script>alert('xss')</script>Safe Title"),
+		},
+	}
+
+	t.Run("list_notifications sanitizes Subject.Title", func(t *testing.T) {
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{maliciousNotification}),
+		})
+		client := github.NewClient(mockedClient)
+		deps := BaseDeps{Client: client}
+		serverTool := ListNotifications(translations.NullTranslationHelper)
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		assert.NotContains(t, textContent.Text, "<script>")
+		assert.Contains(t, textContent.Text, "Safe Title")
+	})
+
+	t.Run("get_notification_details sanitizes Subject.Title", func(t *testing.T) {
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, maliciousNotification),
+		})
+		client := github.NewClient(mockedClient)
+		deps := BaseDeps{Client: client}
+		serverTool := GetNotificationDetails(translations.NullTranslationHelper)
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{
+			"notificationID": "456",
+		})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		assert.NotContains(t, textContent.Text, "<script>")
+		assert.Contains(t, textContent.Text, "Safe Title")
+	})
+}
+
 func Test_ManageNotificationSubscription(t *testing.T) {
 	// Verify tool definition and schema
 	serverTool := ManageNotificationSubscription(translations.NullTranslationHelper)
