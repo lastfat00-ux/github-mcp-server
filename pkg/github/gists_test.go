@@ -183,6 +183,69 @@ func Test_ListGists(t *testing.T) {
 	}
 }
 
+func Test_GistsXSS(t *testing.T) {
+	t.Run("ListGists description sanitization", func(t *testing.T) {
+		serverTool := ListGists(translations.NullTranslationHelper)
+		mockGists := []*github.Gist{
+			{
+				ID:          github.Ptr("gist1"),
+				Description: github.Ptr("Malicious <script>alert('xss')</script> Description"),
+				HTMLURL:     github.Ptr("https://gist.github.com/user/gist1"),
+			},
+		}
+
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetGists: mockResponse(t, http.StatusOK, mockGists),
+		})
+
+		client := github.NewClient(mockedClient)
+		deps := BaseDeps{Client: client}
+		handler := serverTool.Handler(deps)
+
+		request := createMCPRequest(map[string]interface{}{})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returnedGists []*github.Gist
+		err = json.Unmarshal([]byte(textContent.Text), &returnedGists)
+		require.NoError(t, err)
+		require.Len(t, returnedGists, 1)
+		assert.Equal(t, "Malicious  Description", *returnedGists[0].Description)
+	})
+
+	t.Run("GetGist description sanitization", func(t *testing.T) {
+		serverTool := GetGist(translations.NullTranslationHelper)
+		mockGist := github.Gist{
+			ID:          github.Ptr("gist1"),
+			Description: github.Ptr("Malicious <script>alert('xss')</script> Description"),
+			HTMLURL:     github.Ptr("https://gist.github.com/user/gist1"),
+		}
+
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetGistsByGistID: mockResponse(t, http.StatusOK, mockGist),
+		})
+
+		client := github.NewClient(mockedClient)
+		deps := BaseDeps{Client: client}
+		handler := serverTool.Handler(deps)
+
+		request := createMCPRequest(map[string]interface{}{
+			"gist_id": "gist1",
+		})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returnedGist github.Gist
+		err = json.Unmarshal([]byte(textContent.Text), &returnedGist)
+		require.NoError(t, err)
+		assert.Equal(t, "Malicious  Description", *returnedGist.Description)
+	})
+}
+
 func Test_GetGist(t *testing.T) {
 	// Verify tool definition
 	serverTool := GetGist(translations.NullTranslationHelper)
