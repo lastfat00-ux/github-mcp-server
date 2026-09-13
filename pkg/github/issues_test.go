@@ -1911,6 +1911,32 @@ func Test_GetIssueComments(t *testing.T) {
 			},
 			lockdownEnabled: true,
 		},
+		{
+			name: "filters invisible characters and bidi overrides in comment bodies",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, []*github.IssueComment{
+					{
+						ID:   github.Ptr(int64(999)),
+						Body: github.Ptr("Comment with \u200Bzero width space and \u202EBiDi override and `<script>code</script>`"),
+						User: &github.User{Login: github.Ptr("user1")},
+					},
+				}),
+			}),
+			requestArgs: map[string]interface{}{
+				"method":       "get_comments",
+				"owner":        "owner",
+				"repo":         "repo",
+				"issue_number": float64(42),
+			},
+			expectError: false,
+			expectedComments: []*github.IssueComment{
+				{
+					ID:   github.Ptr(int64(999)),
+					Body: github.Ptr("Comment with zero width space and BiDi override and `<script>code</script>`"),
+					User: &github.User{Login: github.Ptr("user1")},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
