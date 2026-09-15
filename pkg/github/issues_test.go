@@ -1844,6 +1844,36 @@ func Test_GetIssueComments(t *testing.T) {
 			expectedComments: mockComments,
 		},
 		{
+			name: "filters invisible Unicode control characters from comment bodies",
+			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+				GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, []*github.IssueComment{
+					{
+						ID:   github.Ptr(int64(999)),
+						Body: github.Ptr("Hello \u200Bworld\u202E! <script>alert(1)</script>"),
+						User: &github.User{
+							Login: github.Ptr("attacker"),
+						},
+					},
+				}),
+			}),
+			requestArgs: map[string]interface{}{
+				"method":       "get_comments",
+				"owner":        "owner",
+				"repo":         "repo",
+				"issue_number": float64(42),
+			},
+			expectError: false,
+			expectedComments: []*github.IssueComment{
+				{
+					ID:   github.Ptr(int64(999)),
+					Body: github.Ptr("Hello world! <script>alert(1)</script>"),
+					User: &github.User{
+						Login: github.Ptr("attacker"),
+					},
+				},
+			},
+		},
+		{
 			name: "successful comments retrieval with pagination",
 			mockedClient: MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
 				GetReposIssuesCommentsByOwnerByRepoByIssueNumber: expectQueryParams(t, map[string]string{
