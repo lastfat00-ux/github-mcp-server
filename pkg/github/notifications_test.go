@@ -138,6 +138,58 @@ func Test_ListNotifications(t *testing.T) {
 	}
 }
 
+func Test_NotificationsXSS(t *testing.T) {
+	mockNotification := &github.Notification{
+		ID: github.Ptr("123"),
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr("Normal title <script>alert('xss')</script>"),
+		},
+		Repository: &github.Repository{
+			Description: github.Ptr("Repo desc <img src=x onerror=alert(1)>"),
+		},
+	}
+
+	t.Run("ListNotifications strips XSS payloads", func(t *testing.T) {
+		serverTool := ListNotifications(translations.NullTranslationHelper)
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{mockNotification}),
+		})
+		client := github.NewClient(mockedClient)
+		deps := BaseDeps{Client: client}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+		text := getTextResult(t, result).Text
+		assert.NotContains(t, text, "<script>")
+		assert.NotContains(t, text, "onerror")
+		assert.Contains(t, text, "Normal title")
+		assert.Contains(t, text, "Repo desc")
+	})
+
+	t.Run("GetNotificationDetails strips XSS payloads", func(t *testing.T) {
+		serverTool := GetNotificationDetails(translations.NullTranslationHelper)
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, mockNotification),
+		})
+		client := github.NewClient(mockedClient)
+		deps := BaseDeps{Client: client}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{"notificationID": "123"})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+		text := getTextResult(t, result).Text
+		assert.NotContains(t, text, "<script>")
+		assert.NotContains(t, text, "onerror")
+		assert.Contains(t, text, "Normal title")
+		assert.Contains(t, text, "Repo desc")
+	})
+}
+
 func Test_ManageNotificationSubscription(t *testing.T) {
 	// Verify tool definition and schema
 	serverTool := ManageNotificationSubscription(translations.NullTranslationHelper)

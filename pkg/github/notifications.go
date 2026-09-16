@@ -11,6 +11,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -149,6 +150,10 @@ func ListNotifications(t translations.TranslationHelperFunc) inventory.ServerToo
 					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, nil
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get notifications", resp, body), nil, nil
+			}
+
+			for _, notification := range notifications {
+				sanitizeNotification(notification)
 			}
 
 			// Marshal response to JSON
@@ -388,6 +393,8 @@ func GetNotificationDetails(t translations.TranslationHelperFunc) inventory.Serv
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get notification details", resp, body), nil, nil
 			}
 
+			sanitizeNotification(thread)
+
 			r, err := json.Marshal(thread)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal response", err), nil, nil
@@ -396,6 +403,21 @@ func GetNotificationDetails(t translations.TranslationHelperFunc) inventory.Serv
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+// sanitizeNotification sanitizes fields in a Notification struct to prevent XSS.
+// Defense in Depth: Downstream LLM-based clients may render notification titles or
+// repository descriptions directly in markdown or HTML contexts.
+func sanitizeNotification(notification *github.Notification) {
+	if notification == nil {
+		return
+	}
+	if notification.Subject != nil && notification.Subject.Title != nil {
+		notification.Subject.Title = github.Ptr(sanitize.Sanitize(*notification.Subject.Title))
+	}
+	if notification.Repository != nil && notification.Repository.Description != nil {
+		notification.Repository.Description = github.Ptr(sanitize.Sanitize(*notification.Repository.Description))
+	}
 }
 
 // Enum values for ManageNotificationSubscription action
