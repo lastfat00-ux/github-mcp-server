@@ -403,6 +403,86 @@ func Test_GetFileContents(t *testing.T) {
 	}
 }
 
+func Test_ReleasesXSS(t *testing.T) {
+	mockXSSRelease := &github.RepositoryRelease{
+		ID:      github.Ptr(int64(100)),
+		TagName: github.Ptr("v1.0.0"),
+		Name:    github.Ptr("<b>Release</b> <script>alert('xss-name')</script>"),
+		Body:    github.Ptr("Features:<br>1. Fix <img src=x onerror=alert('xss-body')> bug."),
+	}
+
+	t.Run("ListReleases sanitizes Name and Body", func(t *testing.T) {
+		serverTool := ListReleases(translations.NullTranslationHelper)
+		client := github.NewClient(NewMockedHTTPClient(
+			WithRequestMatch(GetReposReleasesByOwnerByRepo, []*github.RepositoryRelease{mockXSSRelease}),
+		))
+		deps := BaseDeps{Client: client}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{"owner": "owner", "repo": "repo"})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var releases []*github.RepositoryRelease
+		err = json.Unmarshal([]byte(textContent.Text), &releases)
+		require.NoError(t, err)
+		require.Len(t, releases, 1)
+
+		assert.NotContains(t, *releases[0].Name, "<script>")
+		assert.Contains(t, *releases[0].Name, "<b>Release</b>")
+		assert.NotContains(t, *releases[0].Body, "onerror")
+		assert.Contains(t, *releases[0].Body, "Features:")
+	})
+
+	t.Run("GetLatestRelease sanitizes Name and Body", func(t *testing.T) {
+		serverTool := GetLatestRelease(translations.NullTranslationHelper)
+		client := github.NewClient(NewMockedHTTPClient(
+			WithRequestMatch(GetReposReleasesLatestByOwnerByRepo, mockXSSRelease),
+		))
+		deps := BaseDeps{Client: client}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{"owner": "owner", "repo": "repo"})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var release github.RepositoryRelease
+		err = json.Unmarshal([]byte(textContent.Text), &release)
+		require.NoError(t, err)
+
+		assert.NotContains(t, *release.Name, "<script>")
+		assert.Contains(t, *release.Name, "<b>Release</b>")
+		assert.NotContains(t, *release.Body, "onerror")
+	})
+
+	t.Run("GetReleaseByTag sanitizes Name and Body", func(t *testing.T) {
+		serverTool := GetReleaseByTag(translations.NullTranslationHelper)
+		client := github.NewClient(NewMockedHTTPClient(
+			WithRequestMatch(GetReposReleasesTagsByOwnerByRepoByTag, mockXSSRelease),
+		))
+		deps := BaseDeps{Client: client}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{"owner": "owner", "repo": "repo", "tag": "v1.0.0"})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var release github.RepositoryRelease
+		err = json.Unmarshal([]byte(textContent.Text), &release)
+		require.NoError(t, err)
+
+		assert.NotContains(t, *release.Name, "<script>")
+		assert.Contains(t, *release.Name, "<b>Release</b>")
+		assert.NotContains(t, *release.Body, "onerror")
+	})
+}
+
 func Test_ForkRepository(t *testing.T) {
 	// Verify tool definition once
 	serverTool := ForkRepository(translations.NullTranslationHelper)
