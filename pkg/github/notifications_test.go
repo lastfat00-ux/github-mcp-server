@@ -138,6 +138,53 @@ func Test_ListNotifications(t *testing.T) {
 	}
 }
 
+func Test_NotificationsXSS(t *testing.T) {
+	mockNotification := &github.Notification{
+		ID: github.Ptr("123"),
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr("Fix issue <script>alert('xss')</script><b>important</b>"),
+		},
+	}
+
+	t.Run("ListNotifications sanitizes Subject.Title", func(t *testing.T) {
+		serverTool := ListNotifications(translations.NullTranslationHelper)
+		client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{mockNotification}),
+		}))
+		deps := BaseDeps{Client: client}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+		textContent := getTextResult(t, result)
+
+		assert.NotContains(t, textContent.Text, "<script>")
+		assert.Contains(t, textContent.Text, "Fix issue")
+	})
+
+	t.Run("GetNotificationDetails sanitizes Subject.Title", func(t *testing.T) {
+		serverTool := GetNotificationDetails(translations.NullTranslationHelper)
+		client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, mockNotification),
+		}))
+		deps := BaseDeps{Client: client}
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{
+			"notificationID": "123",
+		})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+		textContent := getTextResult(t, result)
+
+		assert.NotContains(t, textContent.Text, "<script>")
+		assert.Contains(t, textContent.Text, "Fix issue")
+	})
+}
+
 func Test_ManageNotificationSubscription(t *testing.T) {
 	// Verify tool definition and schema
 	serverTool := ManageNotificationSubscription(translations.NullTranslationHelper)
