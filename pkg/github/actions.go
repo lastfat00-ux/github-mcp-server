@@ -13,6 +13,7 @@ import (
 	buffer "github.com/github/github-mcp-server/pkg/buffer"
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -108,6 +109,12 @@ func ListWorkflows(t translations.TranslationHelperFunc) inventory.ServerTool {
 				return nil, nil, fmt.Errorf("failed to list workflows: %w", err)
 			}
 			defer func() { _ = resp.Body.Close() }()
+
+			if workflows != nil {
+				for _, w := range workflows.Workflows {
+					sanitizeWorkflow(w)
+				}
+			}
 
 			r, err := json.Marshal(workflows)
 			if err != nil {
@@ -263,6 +270,12 @@ func ListWorkflowRuns(t translations.TranslationHelperFunc) inventory.ServerTool
 				return nil, nil, fmt.Errorf("failed to list workflow runs: %w", err)
 			}
 			defer func() { _ = resp.Body.Close() }()
+
+			if workflowRuns != nil {
+				for _, r := range workflowRuns.WorkflowRuns {
+					sanitizeWorkflowRun(r)
+				}
+			}
 
 			r, err := json.Marshal(workflowRuns)
 			if err != nil {
@@ -446,6 +459,8 @@ func GetWorkflowRun(t translations.TranslationHelperFunc) inventory.ServerTool {
 			}
 			defer func() { _ = resp.Body.Close() }()
 
+			sanitizeWorkflowRun(workflowRun)
+
 			r, err := json.Marshal(workflowRun)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -619,6 +634,12 @@ func ListWorkflowJobs(t translations.TranslationHelperFunc) inventory.ServerTool
 				return nil, nil, fmt.Errorf("failed to list workflow jobs: %w", err)
 			}
 			defer func() { _ = resp.Body.Close() }()
+
+			if jobs != nil {
+				for _, j := range jobs.Jobs {
+					sanitizeWorkflowJob(j)
+				}
+			}
 
 			// Add optimization tip for failed job debugging
 			response := map[string]any{
@@ -1999,6 +2020,7 @@ func getWorkflow(ctx context.Context, client *github.Client, owner, repo, resour
 	}
 
 	defer func() { _ = resp.Body.Close() }()
+	sanitizeWorkflow(workflow)
 	r, err := json.Marshal(workflow)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal workflow: %w", err)
@@ -2013,6 +2035,7 @@ func getWorkflowRun(ctx context.Context, client *github.Client, owner, repo stri
 		return ghErrors.NewGitHubAPIErrorResponse(ctx, "failed to get workflow run", resp, err), nil, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
+	sanitizeWorkflowRun(workflowRun)
 	r, err := json.Marshal(workflowRun)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal workflow run: %w", err)
@@ -2026,6 +2049,7 @@ func getWorkflowJob(ctx context.Context, client *github.Client, owner, repo stri
 		return ghErrors.NewGitHubAPIErrorResponse(ctx, "failed to get workflow job", resp, err), nil, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
+	sanitizeWorkflowJob(workflowJob)
 	r, err := json.Marshal(workflowJob)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal workflow job: %w", err)
@@ -2044,6 +2068,12 @@ func listWorkflows(ctx context.Context, client *github.Client, owner, repo strin
 		return ghErrors.NewGitHubAPIErrorResponse(ctx, "failed to list workflows", resp, err), nil, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	if workflows != nil {
+		for _, w := range workflows.Workflows {
+			sanitizeWorkflow(w)
+		}
+	}
 
 	r, err := json.Marshal(workflows)
 	if err != nil {
@@ -2095,6 +2125,11 @@ func listWorkflowRuns(ctx context.Context, client *github.Client, args map[strin
 	}
 
 	defer func() { _ = resp.Body.Close() }()
+	if workflowRuns != nil {
+		for _, r := range workflowRuns.WorkflowRuns {
+			sanitizeWorkflowRun(r)
+		}
+	}
 	r, err := json.Marshal(workflowRuns)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal workflow runs: %w", err)
@@ -2127,6 +2162,12 @@ func listWorkflowJobs(ctx context.Context, client *github.Client, args map[strin
 	})
 	if err != nil {
 		return ghErrors.NewGitHubAPIErrorResponse(ctx, "failed to list workflow jobs", resp, err), nil, nil
+	}
+
+	if workflowJobs != nil {
+		for _, j := range workflowJobs.Jobs {
+			sanitizeWorkflowJob(j)
+		}
 	}
 
 	response := map[string]any{
@@ -2334,6 +2375,50 @@ func cancelWorkflowRun(ctx context.Context, client *github.Client, owner, repo s
 	}
 
 	return utils.NewToolResultText(string(r)), nil, nil
+}
+
+// Defense in Depth: Sanitize GitHub Actions workflow names to prevent XSS vulnerabilities when rendered by downstream LLM-based clients.
+func sanitizeWorkflow(workflow *github.Workflow) {
+	if workflow == nil {
+		return
+	}
+	if workflow.Name != nil {
+		workflow.Name = github.Ptr(sanitize.Sanitize(*workflow.Name))
+	}
+}
+
+// Defense in Depth: Sanitize GitHub Actions workflow run names, display titles, and head commit messages to prevent XSS vulnerabilities when rendered by downstream LLM-based clients.
+func sanitizeWorkflowRun(run *github.WorkflowRun) {
+	if run == nil {
+		return
+	}
+	if run.Name != nil {
+		run.Name = github.Ptr(sanitize.Sanitize(*run.Name))
+	}
+	if run.DisplayTitle != nil {
+		run.DisplayTitle = github.Ptr(sanitize.Sanitize(*run.DisplayTitle))
+	}
+	if run.HeadCommit != nil && run.HeadCommit.Message != nil {
+		run.HeadCommit.Message = github.Ptr(sanitize.Sanitize(*run.HeadCommit.Message))
+	}
+}
+
+// Defense in Depth: Sanitize GitHub Actions workflow job names, workflow names, and step names to prevent XSS vulnerabilities when rendered by downstream LLM-based clients.
+func sanitizeWorkflowJob(job *github.WorkflowJob) {
+	if job == nil {
+		return
+	}
+	if job.Name != nil {
+		job.Name = github.Ptr(sanitize.Sanitize(*job.Name))
+	}
+	if job.WorkflowName != nil {
+		job.WorkflowName = github.Ptr(sanitize.Sanitize(*job.WorkflowName))
+	}
+	for _, step := range job.Steps {
+		if step != nil && step.Name != nil {
+			step.Name = github.Ptr(sanitize.Sanitize(*step.Name))
+		}
+	}
 }
 
 func deleteWorkflowRunLogs(ctx context.Context, client *github.Client, owner, repo string, runID int64) (*mcp.CallToolResult, any, error) {
