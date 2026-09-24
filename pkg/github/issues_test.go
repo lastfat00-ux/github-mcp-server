@@ -1965,6 +1965,55 @@ func Test_GetIssueComments(t *testing.T) {
 	}
 }
 
+func Test_GetIssueCommentsInvisibleCharacters(t *testing.T) {
+	serverTool := IssueRead(translations.NullTranslationHelper)
+
+	// Comment contains zero-width space (\u200B), BiDi control (\u202A), soft hyphen (\u00AD),
+	// alongside normal markdown and code snippets like <script> alert('test') </script>.
+	invisibleBody := "Comment with\u200B hidden\u202A chars\u00AD and code: <script>alert('test')</script>"
+	mockComments := []*github.IssueComment{
+		{
+			ID:   github.Ptr(int64(1)),
+			Body: github.Ptr(invisibleBody),
+			User: &github.User{Login: github.Ptr("user1")},
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, mockComments),
+	})
+
+	client := github.NewClient(mockedClient)
+	gqlClient := githubv4.NewClient(nil)
+	deps := BaseDeps{
+		Client:          client,
+		GQLClient:       gqlClient,
+		RepoAccessCache: stubRepoAccessCache(gqlClient, 15*time.Minute),
+		Flags:           stubFeatureFlags(nil),
+	}
+	handler := serverTool.Handler(deps)
+
+	requestArgs := map[string]interface{}{
+		"method":       "get_comments",
+		"owner":        "owner",
+		"repo":         "repo",
+		"issue_number": float64(42),
+	}
+	request := createMCPRequest(requestArgs)
+
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+	require.NoError(t, err)
+
+	textContent := getTextResult(t, result)
+	var returnedComments []*github.IssueComment
+	err = json.Unmarshal([]byte(textContent.Text), &returnedComments)
+	require.NoError(t, err)
+	require.Len(t, returnedComments, 1)
+
+	// Verify invisible characters were stripped, but raw markdown/HTML code snippet was preserved
+	assert.Equal(t, "Comment with hidden chars and code: \u003cscript\u003ealert('test')\u003c/script\u003e", returnedComments[0].GetBody())
+}
+
 func Test_GetIssueLabels(t *testing.T) {
 	t.Parallel()
 
