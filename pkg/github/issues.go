@@ -424,6 +424,14 @@ func GetIssueComments(ctx context.Context, client *github.Client, cache *lockdow
 		comments = filteredComments
 	}
 
+	// Filter invisible control characters and BiDi overrides to prevent prompt injection
+	// and UI spoofing without stripping markdown code samples or HTML tags in issue comments.
+	for _, comment := range comments {
+		if comment != nil && comment.Body != nil {
+			comment.Body = github.Ptr(sanitize.FilterInvisibleCharacters(*comment.Body))
+		}
+	}
+
 	r, err := json.Marshal(comments)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
