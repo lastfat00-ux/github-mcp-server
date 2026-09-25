@@ -358,6 +358,36 @@ func Test_GetIssue(t *testing.T) {
 	}
 }
 
+func Test_GetIssueCommentsXSS(t *testing.T) {
+	mockComments := []*github.IssueComment{
+		{
+			ID:   github.Ptr(int64(123)),
+			Body: github.Ptr("<script>alert('xss')</script><b>Safe Comment</b>"),
+			User: &github.User{
+				Login: github.Ptr("user1"),
+			},
+		},
+	}
+
+	mockedClient := NewMockedHTTPClient(
+		WithRequestMatch(
+			GetReposIssuesCommentsByOwnerByRepoByIssueNumber,
+			mockComments,
+		),
+	)
+
+	client := github.NewClient(mockedClient)
+	result, err := GetIssueComments(context.Background(), client, nil, "owner", "repo", 1, PaginationParams{}, FeatureFlags{})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.IsError)
+
+	textContent := getTextResult(t, result)
+	assert.NotContains(t, textContent.Text, "<script>")
+	assert.NotContains(t, textContent.Text, "alert('xss')")
+	assert.Contains(t, textContent.Text, "Safe Comment")
+}
+
 func Test_AddIssueComment(t *testing.T) {
 	// Verify tool definition once
 	serverTool := AddIssueComment(translations.NullTranslationHelper)
