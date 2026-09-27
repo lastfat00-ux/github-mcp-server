@@ -17,7 +17,7 @@ import (
 	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/lockdown"
 	"github.com/github/github-mcp-server/pkg/octicons"
-	"github.com/github/github-mcp-server/pkg/sanitize"
+	"github.com/github/github-mcp-server/pkg/sanitize" // HTML sanitization for defense in depth
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -372,6 +372,14 @@ func GetPullRequestReviewComments(ctx context.Context, gqlClient *githubv4.Clien
 		), nil
 	}
 
+	// Sanitize review comment bodies for Defense in Depth against rendering XSS payloads in downstream clients.
+	for i := range query.Repository.PullRequest.ReviewThreads.Nodes {
+		thread := &query.Repository.PullRequest.ReviewThreads.Nodes[i]
+		for j := range thread.Comments.Nodes {
+			thread.Comments.Nodes[j].Body = githubv4.String(sanitize.Sanitize(string(thread.Comments.Nodes[j].Body)))
+		}
+	}
+
 	// Lockdown mode filtering
 	if ff.LockdownMode {
 		if cache == nil {
@@ -438,6 +446,13 @@ func GetPullRequestReviews(ctx context.Context, client *github.Client, cache *lo
 			return nil, fmt.Errorf("failed to read response body: %w", err)
 		}
 		return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get pull request reviews", resp, body), nil
+	}
+
+	// Sanitize review bodies for Defense in Depth against rendering XSS payloads in downstream clients.
+	for _, review := range reviews {
+		if review != nil && review.Body != nil {
+			review.Body = github.Ptr(sanitize.Sanitize(*review.Body))
+		}
 	}
 
 	if ff.LockdownMode {
