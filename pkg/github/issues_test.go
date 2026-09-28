@@ -2039,6 +2039,57 @@ func Test_GetIssueLabels(t *testing.T) {
 			),
 			expectToolError: false,
 		},
+		{
+			name: "issue labels listing with xss sanitization",
+			requestArgs: map[string]any{
+				"method":       "get_labels",
+				"owner":        "owner",
+				"repo":         "repo",
+				"issue_number": float64(123),
+			},
+			mockedClient: githubv4mock.NewMockedHTTPClient(
+				githubv4mock.NewQueryMatcher(
+					struct {
+						Repository struct {
+							Issue struct {
+								Labels struct {
+									Nodes []struct {
+										ID          githubv4.ID
+										Name        githubv4.String
+										Color       githubv4.String
+										Description githubv4.String
+									}
+									TotalCount githubv4.Int
+								} `graphql:"labels(first: 100)"`
+							} `graphql:"issue(number: $issueNumber)"`
+						} `graphql:"repository(owner: $owner, name: $repo)"`
+					}{},
+					map[string]any{
+						"owner":       githubv4.String("owner"),
+						"repo":        githubv4.String("repo"),
+						"issueNumber": githubv4.Int(123),
+					},
+					githubv4mock.DataResponse(map[string]any{
+						"repository": map[string]any{
+							"issue": map[string]any{
+								"labels": map[string]any{
+									"nodes": []any{
+										map[string]any{
+											"id":          githubv4.ID("label-xss"),
+											"name":        githubv4.String("<script>alert(1)</script><b>label</b>"),
+											"color":       githubv4.String("d73a4a"),
+											"description": githubv4.String("<img src=x onerror=alert('xss')><b>Description</b>"),
+										},
+									},
+									"totalCount": githubv4.Int(1),
+								},
+							},
+						},
+					}),
+				),
+			),
+			expectToolError: false,
+		},
 	}
 
 	for _, tc := range tests {
@@ -2067,6 +2118,13 @@ func Test_GetIssueLabels(t *testing.T) {
 				}
 			} else {
 				assert.False(t, result.IsError)
+				if tc.name == "issue labels listing with xss sanitization" {
+					textContent := getTextResult(t, result)
+					assert.NotContains(t, textContent.Text, "<script>")
+					assert.NotContains(t, textContent.Text, "onerror")
+					assert.Contains(t, textContent.Text, "\\u003cb\\u003elabel\\u003c/b\\u003e")
+					assert.Contains(t, textContent.Text, "\\u003cb\\u003eDescription\\u003c/b\\u003e")
+				}
 			}
 		})
 	}
