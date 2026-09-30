@@ -358,6 +358,54 @@ func Test_GetIssue(t *testing.T) {
 	}
 }
 
+func Test_GetIssueCommentsXSS(t *testing.T) {
+	mockComments := []*github.IssueComment{
+		{
+			ID:   github.Ptr(int64(1)),
+			Body: github.Ptr("Safe comment <b>bold</b> <script>alert('xss')</script> <img src=x onerror=alert(1)>"),
+			User: &github.User{Login: github.Ptr("user1")},
+		},
+	}
+
+	mockClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, mockComments),
+	})
+
+	client := github.NewClient(mockClient)
+	gqlClient := githubv4.NewClient(nil)
+	deps := BaseDeps{
+		Client:          client,
+		GQLClient:       gqlClient,
+		RepoAccessCache: stubRepoAccessCache(gqlClient, 15*time.Minute),
+		Flags:           stubFeatureFlags(map[string]bool{"lockdown-mode": false}),
+	}
+
+	serverTool := IssueRead(translations.NullTranslationHelper)
+	handler := serverTool.Handler(deps)
+
+	req := createMCPRequest(map[string]any{
+		"method":       "get_comments",
+		"owner":        "owner",
+		"repo":         "repo",
+		"issue_number": float64(42),
+	})
+
+	res, err := handler(ContextWithDeps(context.Background(), deps), &req)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.False(t, res.IsError)
+
+	textContent := getTextResult(t, res)
+	var returnedComments []*github.IssueComment
+	err = json.Unmarshal([]byte(textContent.Text), &returnedComments)
+	require.NoError(t, err)
+	require.Len(t, returnedComments, 1)
+
+	assert.NotContains(t, *returnedComments[0].Body, "<script>")
+	assert.NotContains(t, *returnedComments[0].Body, "onerror")
+	assert.Contains(t, *returnedComments[0].Body, "<b>bold</b>")
+}
+
 func Test_AddIssueComment(t *testing.T) {
 	// Verify tool definition once
 	serverTool := AddIssueComment(translations.NullTranslationHelper)
