@@ -138,6 +138,75 @@ func Test_ListNotifications(t *testing.T) {
 	}
 }
 
+func Test_NotificationsXSS(t *testing.T) {
+	t.Run("ListNotifications sanitizes subject title", func(t *testing.T) {
+		mockNotification := &github.Notification{
+			ID: github.Ptr("123"),
+			Subject: &github.NotificationSubject{
+				Title: github.Ptr("<script>alert('xss')</script><b>Safe</b>"),
+			},
+		}
+
+		client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{mockNotification}),
+		}))
+
+		deps := BaseDeps{Client: client}
+		serverTool := ListNotifications(translations.NullTranslationHelper)
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returned []*github.Notification
+		err = json.Unmarshal([]byte(textContent.Text), &returned)
+		require.NoError(t, err)
+		require.Len(t, returned, 1)
+
+		assert.NotNil(t, returned[0].Subject)
+		assert.NotNil(t, returned[0].Subject.Title)
+		assert.NotContains(t, *returned[0].Subject.Title, "<script>")
+		assert.Contains(t, *returned[0].Subject.Title, "<b>Safe</b>")
+	})
+
+	t.Run("GetNotificationDetails sanitizes subject title", func(t *testing.T) {
+		mockThread := &github.Notification{
+			ID: github.Ptr("123"),
+			Subject: &github.NotificationSubject{
+				Title: github.Ptr("<img src=x onerror=alert('xss')>Test Notification"),
+			},
+		}
+
+		client := github.NewClient(MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, mockThread),
+		}))
+
+		deps := BaseDeps{Client: client}
+		serverTool := GetNotificationDetails(translations.NullTranslationHelper)
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{
+			"notificationID": "123",
+		})
+
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returned github.Notification
+		err = json.Unmarshal([]byte(textContent.Text), &returned)
+		require.NoError(t, err)
+
+		assert.NotNil(t, returned.Subject)
+		assert.NotNil(t, returned.Subject.Title)
+		assert.NotContains(t, *returned.Subject.Title, "onerror")
+		assert.Contains(t, *returned.Subject.Title, "Test Notification")
+	})
+}
+
 func Test_ManageNotificationSubscription(t *testing.T) {
 	// Verify tool definition and schema
 	serverTool := ManageNotificationSubscription(translations.NullTranslationHelper)
