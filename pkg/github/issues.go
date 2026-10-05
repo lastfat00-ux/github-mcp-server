@@ -13,7 +13,7 @@ import (
 	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/lockdown"
 	"github.com/github/github-mcp-server/pkg/octicons"
-	"github.com/github/github-mcp-server/pkg/sanitize"
+	"github.com/github/github-mcp-server/pkg/sanitize" // sanitize package for XSS defense
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -422,6 +422,13 @@ func GetIssueComments(ctx context.Context, client *github.Client, cache *lockdow
 			}
 		}
 		comments = filteredComments
+	}
+
+	// Sanitize comment body on response (Defense in Depth to prevent XSS in downstream rendering clients)
+	for _, comment := range comments {
+		if comment != nil && comment.Body != nil {
+			comment.Body = github.Ptr(sanitize.Sanitize(*comment.Body))
+		}
 	}
 
 	r, err := json.Marshal(comments)
