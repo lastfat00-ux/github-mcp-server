@@ -1965,6 +1965,38 @@ func Test_GetIssueComments(t *testing.T) {
 	}
 }
 
+func Test_GetIssueCommentsXSS(t *testing.T) {
+	mockComments := []*github.IssueComment{
+		{
+			ID:   github.Ptr(int64(101)),
+			Body: github.Ptr("Normal comment with <script>alert('xss')</script> tag and <img src=x onerror=alert(1)> image"),
+			User: &github.User{Login: github.Ptr("user1")},
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, mockComments),
+	})
+
+	client := github.NewClient(mockedClient)
+
+	pagination := PaginationParams{Page: 1, PerPage: 10}
+	flags := FeatureFlags{}
+
+	result, err := GetIssueComments(context.Background(), client, nil, "owner", "repo", 42, pagination, flags)
+	require.NoError(t, err)
+
+	textContent := getTextResult(t, result)
+	assert.NotContains(t, textContent.Text, "<script>")
+	assert.NotContains(t, textContent.Text, "onerror")
+
+	var returnedComments []*github.IssueComment
+	err = json.Unmarshal([]byte(textContent.Text), &returnedComments)
+	require.NoError(t, err)
+	require.Len(t, returnedComments, 1)
+	assert.Equal(t, `Normal comment with  tag and <img src="x"> image`, returnedComments[0].GetBody())
+}
+
 func Test_GetIssueLabels(t *testing.T) {
 	t.Parallel()
 
