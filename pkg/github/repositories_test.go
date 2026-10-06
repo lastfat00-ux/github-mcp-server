@@ -403,6 +403,66 @@ func Test_GetFileContents(t *testing.T) {
 	}
 }
 
+func Test_ReleasesXSS(t *testing.T) {
+	mockReleaseWithXSS := &github.RepositoryRelease{
+		ID:      github.Ptr(int64(1)),
+		TagName: github.Ptr("v1.0.0"),
+		Name:    github.Ptr("Release <script>alert('xss')</script>"),
+		Body:    github.Ptr("<b>Safe html</b><img src=x onerror=alert(1)>"),
+	}
+
+	mockedClient := NewMockedHTTPClient(
+		WithRequestMatch(
+			GetReposReleasesByOwnerByRepo,
+			[]*github.RepositoryRelease{mockReleaseWithXSS},
+		),
+		WithRequestMatch(
+			GetReposReleasesLatestByOwnerByRepo,
+			mockReleaseWithXSS,
+		),
+		WithRequestMatch(
+			GetReposReleasesTagsByOwnerByRepoByTag,
+			mockReleaseWithXSS,
+		),
+	)
+
+	client := github.NewClient(mockedClient)
+	deps := BaseDeps{Client: client}
+
+	// Test ListReleases
+	listTool := ListReleases(translations.NullTranslationHelper)
+	listHandler := listTool.Handler(deps)
+	req := createMCPRequest(map[string]interface{}{"owner": "owner", "repo": "repo"})
+	res, err := listHandler(ContextWithDeps(context.Background(), deps), &req)
+	require.NoError(t, err)
+	textContent := getTextResult(t, res)
+	assert.NotContains(t, textContent.Text, "<script>")
+	assert.NotContains(t, textContent.Text, "onerror")
+	assert.Contains(t, textContent.Text, "Safe html")
+
+	// Test GetLatestRelease
+	latestTool := GetLatestRelease(translations.NullTranslationHelper)
+	latestHandler := latestTool.Handler(deps)
+	reqLatest := createMCPRequest(map[string]interface{}{"owner": "owner", "repo": "repo"})
+	resLatest, err := latestHandler(ContextWithDeps(context.Background(), deps), &reqLatest)
+	require.NoError(t, err)
+	textContentLatest := getTextResult(t, resLatest)
+	assert.NotContains(t, textContentLatest.Text, "<script>")
+	assert.NotContains(t, textContentLatest.Text, "onerror")
+	assert.Contains(t, textContentLatest.Text, "Safe html")
+
+	// Test GetReleaseByTag
+	tagTool := GetReleaseByTag(translations.NullTranslationHelper)
+	tagHandler := tagTool.Handler(deps)
+	reqTag := createMCPRequest(map[string]interface{}{"owner": "owner", "repo": "repo", "tag": "v1.0.0"})
+	resTag, err := tagHandler(ContextWithDeps(context.Background(), deps), &reqTag)
+	require.NoError(t, err)
+	textContentTag := getTextResult(t, resTag)
+	assert.NotContains(t, textContentTag.Text, "<script>")
+	assert.NotContains(t, textContentTag.Text, "onerror")
+	assert.Contains(t, textContentTag.Text, "Safe html")
+}
+
 func Test_ForkRepository(t *testing.T) {
 	// Verify tool definition once
 	serverTool := ForkRepository(translations.NullTranslationHelper)
