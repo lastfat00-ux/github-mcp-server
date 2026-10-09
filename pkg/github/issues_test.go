@@ -358,6 +358,55 @@ func Test_GetIssue(t *testing.T) {
 	}
 }
 
+func Test_GetIssueCommentsXSS(t *testing.T) {
+	mockComments := []*github.IssueComment{
+		{
+			ID:   github.Ptr(int64(123)),
+			Body: github.Ptr("Normal comment with <b>safe HTML</b> and <script>alert('xss')</script> malicious script tag"),
+			User: &github.User{Login: github.Ptr("user1")},
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, mockComments),
+	})
+
+	client := github.NewClient(mockedClient)
+	gqlClient := githubv4.NewClient(nil)
+	cache := stubRepoAccessCache(gqlClient, 15*time.Minute)
+	flags := stubFeatureFlags(map[string]bool{})
+	deps := BaseDeps{
+		Client:          client,
+		GQLClient:       gqlClient,
+		RepoAccessCache: cache,
+		Flags:           flags,
+	}
+
+	serverTool := IssueRead(translations.NullTranslationHelper)
+	handler := serverTool.Handler(deps)
+
+	request := createMCPRequest(map[string]interface{}{
+		"method":       "get_comments",
+		"owner":        "owner",
+		"repo":         "repo",
+		"issue_number": float64(42),
+	})
+
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+	require.NoError(t, err)
+
+	textContent := getTextResult(t, result)
+
+	var returnedComments []*github.IssueComment
+	err = json.Unmarshal([]byte(textContent.Text), &returnedComments)
+	require.NoError(t, err)
+
+	require.Len(t, returnedComments, 1)
+	assert.NotContains(t, returnedComments[0].GetBody(), "<script>")
+	assert.NotContains(t, returnedComments[0].GetBody(), "alert('xss')")
+	assert.Contains(t, returnedComments[0].GetBody(), "Normal comment with")
+}
+
 func Test_AddIssueComment(t *testing.T) {
 	// Verify tool definition once
 	serverTool := AddIssueComment(translations.NullTranslationHelper)
