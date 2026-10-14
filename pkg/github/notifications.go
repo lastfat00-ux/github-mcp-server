@@ -11,6 +11,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -24,6 +25,13 @@ const (
 	FilterIncludeRead       = "include_read_notifications"
 	FilterOnlyParticipating = "only_participating"
 )
+
+// sanitizeNotification filters invisible control characters and BiDi overrides from notification titles (Defense in Depth)
+func sanitizeNotification(n *github.Notification) {
+	if n != nil && n.Subject != nil && n.Subject.Title != nil {
+		n.Subject.Title = github.Ptr(sanitize.FilterInvisibleCharacters(*n.Subject.Title))
+	}
+}
 
 // ListNotifications creates a tool to list notifications for the current user.
 func ListNotifications(t translations.TranslationHelperFunc) inventory.ServerTool {
@@ -149,6 +157,10 @@ func ListNotifications(t translations.TranslationHelperFunc) inventory.ServerToo
 					return utils.NewToolResultErrorFromErr("failed to read response body", err), nil, nil
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get notifications", resp, body), nil, nil
+			}
+
+			for _, n := range notifications {
+				sanitizeNotification(n)
 			}
 
 			// Marshal response to JSON
@@ -387,6 +399,8 @@ func GetNotificationDetails(t translations.TranslationHelperFunc) inventory.Serv
 				}
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get notification details", resp, body), nil, nil
 			}
+
+			sanitizeNotification(thread)
 
 			r, err := json.Marshal(thread)
 			if err != nil {
