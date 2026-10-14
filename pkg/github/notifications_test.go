@@ -138,6 +138,68 @@ func Test_ListNotifications(t *testing.T) {
 	}
 }
 
+func Test_NotificationsInvisibleCharacters(t *testing.T) {
+	// Notification title with code snippet <script> and hidden zero-width space / BiDi override characters
+	inputTitle := "Notification Title <script>alert('test')</script> \u200B\u202E"
+	notification := &github.Notification{
+		ID: github.Ptr("123"),
+		Subject: &github.NotificationSubject{
+			Title: github.Ptr(inputTitle),
+		},
+	}
+
+	t.Run("ListNotifications strips invisible characters while preserving code samples", func(t *testing.T) {
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetNotifications: mockResponse(t, http.StatusOK, []*github.Notification{notification}),
+		})
+		client := github.NewClient(mockedClient)
+		deps := BaseDeps{Client: client}
+		serverTool := ListNotifications(translations.NullTranslationHelper)
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+		textContent := getTextResult(t, result)
+
+		var returned []*github.Notification
+		err = json.Unmarshal([]byte(textContent.Text), &returned)
+		require.NoError(t, err)
+		require.Len(t, returned, 1)
+
+		// Verification: code snippet <script> is preserved in title
+		assert.Equal(t, "Notification Title <script>alert('test')</script> ", *returned[0].Subject.Title)
+		// Verification: invisible/control characters \u200B and \u202E are stripped
+		assert.NotContains(t, *returned[0].Subject.Title, "\u200B")
+		assert.NotContains(t, *returned[0].Subject.Title, "\u202E")
+	})
+
+	t.Run("GetNotificationDetails strips invisible characters while preserving code samples", func(t *testing.T) {
+		mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetNotificationsThreadsByThreadID: mockResponse(t, http.StatusOK, notification),
+		})
+		client := github.NewClient(mockedClient)
+		deps := BaseDeps{Client: client}
+		serverTool := GetNotificationDetails(translations.NullTranslationHelper)
+		handler := serverTool.Handler(deps)
+		request := createMCPRequest(map[string]interface{}{"notificationID": "123"})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+		textContent := getTextResult(t, result)
+
+		var returned github.Notification
+		err = json.Unmarshal([]byte(textContent.Text), &returned)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Notification Title <script>alert('test')</script> ", *returned.Subject.Title)
+		assert.NotContains(t, *returned.Subject.Title, "\u200B")
+		assert.NotContains(t, *returned.Subject.Title, "\u202E")
+	})
+}
+
 func Test_ManageNotificationSubscription(t *testing.T) {
 	// Verify tool definition and schema
 	serverTool := ManageNotificationSubscription(translations.NullTranslationHelper)
