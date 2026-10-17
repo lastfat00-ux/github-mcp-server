@@ -3227,3 +3227,129 @@ func getLatestPendingReviewQuery(p getLatestPendingReviewQueryParams) githubv4mo
 		),
 	)
 }
+
+func Test_GetPullRequestReviewsXSS(t *testing.T) {
+	mockReviews := []*github.PullRequestReview{
+		{
+			ID:    github.Ptr(int64(201)),
+			State: github.Ptr("APPROVED"),
+			Body:  github.Ptr("<script>alert('xss')</script>Looks good <b>to me</b>"),
+			User: &github.User{
+				Login: github.Ptr("approver"),
+			},
+		},
+	}
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetReposPullsReviewsByOwnerByRepoByPullNumber: mockResponse(t, http.StatusOK, mockReviews),
+	})
+	client := github.NewClient(mockedClient)
+	serverTool := PullRequestRead(translations.NullTranslationHelper)
+	deps := BaseDeps{
+		Client: client,
+	}
+	handler := serverTool.Handler(deps)
+	request := createMCPRequest(map[string]interface{}{
+		"method":     "get_reviews",
+		"owner":      "owner",
+		"repo":       "repo",
+		"pullNumber": float64(42),
+	})
+
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+	require.NoError(t, err)
+	textContent := getTextResult(t, result)
+
+	var returnedReviews []*github.PullRequestReview
+	err = json.Unmarshal([]byte(textContent.Text), &returnedReviews)
+	require.NoError(t, err)
+	require.Len(t, returnedReviews, 1)
+	assert.NotContains(t, *returnedReviews[0].Body, "<script>")
+	assert.Contains(t, *returnedReviews[0].Body, "Looks good <b>to me</b>")
+}
+
+func Test_GetPullRequestReviewCommentsXSS(t *testing.T) {
+	gqlClient := githubv4mock.NewMockedHTTPClient(
+		githubv4mock.NewQueryMatcher(
+			reviewThreadsQuery{},
+			map[string]interface{}{
+				"owner":             githubv4.String("owner"),
+				"repo":              githubv4.String("repo"),
+				"prNum":             githubv4.Int(42),
+				"first":             githubv4.Int(30),
+				"commentsPerThread": githubv4.Int(100),
+				"after":             (*githubv4.String)(nil),
+			},
+			githubv4mock.DataResponse(map[string]any{
+				"repository": map[string]any{
+					"pullRequest": map[string]any{
+						"reviewThreads": map[string]any{
+							"nodes": []map[string]any{
+								{
+									"id":          "RT_kwDOA0xdyM4AX1Yz",
+									"isResolved":  false,
+									"isOutdated":  false,
+									"isCollapsed": false,
+									"comments": map[string]any{
+										"totalCount": 1,
+										"nodes": []map[string]any{
+											{
+												"id":   "PRRC_kwDOA0xdyM4AX1Y0",
+												"body": "<script>alert('xss')</script>Fix this <b>now</b>",
+												"path": "file1.go",
+												"line": 5,
+												"author": map[string]any{
+													"login": "reviewer1",
+												},
+												"createdAt": "2024-01-01T12:00:00Z",
+												"updatedAt": "2024-01-01T12:00:00Z",
+												"url":       "https://github.com/owner/repo/pull/42#discussion_r101",
+											},
+										},
+									},
+								},
+							},
+							"pageInfo": map[string]any{
+								"hasNextPage":     false,
+								"hasPreviousPage": false,
+								"startCursor":     "cursor1",
+								"endCursor":       "cursor2",
+							},
+							"totalCount": 1,
+						},
+					},
+				},
+			}),
+		),
+	)
+
+	serverTool := PullRequestRead(translations.NullTranslationHelper)
+	deps := BaseDeps{
+		Client:    github.NewClient(nil),
+		GQLClient: githubv4.NewClient(gqlClient),
+	}
+	handler := serverTool.Handler(deps)
+	request := createMCPRequest(map[string]interface{}{
+		"method":     "get_review_comments",
+		"owner":      "owner",
+		"repo":       "repo",
+		"pullNumber": float64(42),
+	})
+
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+	require.NoError(t, err)
+	textContent := getTextResult(t, result)
+
+	var res map[string]interface{}
+	err = json.Unmarshal([]byte(textContent.Text), &res)
+	require.NoError(t, err)
+
+	threads := res["reviewThreads"].([]interface{})
+	thread := threads[0].(map[string]interface{})
+	comments := thread["Comments"].(map[string]interface{})
+	nodes := comments["Nodes"].([]interface{})
+	comment := nodes[0].(map[string]interface{})
+
+	body := comment["Body"].(string)
+	assert.NotContains(t, body, "<script>")
+	assert.Contains(t, body, "Fix this <b>now</b>")
+}
