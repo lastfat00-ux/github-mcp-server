@@ -183,6 +183,72 @@ func Test_ListGists(t *testing.T) {
 	}
 }
 
+func Test_GistsXSS(t *testing.T) {
+	t.Run("list_gists sanitizes malicious HTML in descriptions", func(t *testing.T) {
+		mockGists := []*github.Gist{
+			{
+				ID:          github.Ptr("gist1"),
+				Description: github.Ptr("Safe description <script>alert('xss')</script>"),
+				HTMLURL:     github.Ptr("https://gist.github.com/user/gist1"),
+			},
+		}
+
+		mockClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetGists: mockResponse(t, http.StatusOK, mockGists),
+		})
+
+		client := github.NewClient(mockClient)
+		deps := BaseDeps{Client: client}
+		tool := ListGists(translations.NullTranslationHelper)
+		handler := tool.Handler(deps)
+
+		request := createMCPRequest(map[string]interface{}{})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var gists []*github.Gist
+		err = json.Unmarshal([]byte(textContent.Text), &gists)
+		require.NoError(t, err)
+		require.Len(t, gists, 1)
+
+		assert.NotContains(t, *gists[0].Description, "<script>")
+		assert.Equal(t, "Safe description ", *gists[0].Description)
+	})
+
+	t.Run("get_gist sanitizes malicious HTML in description", func(t *testing.T) {
+		mockGist := github.Gist{
+			ID:          github.Ptr("gist1"),
+			Description: github.Ptr("Bad gist <img src=x onerror=alert(1)>"),
+			HTMLURL:     github.Ptr("https://gist.github.com/user/gist1"),
+		}
+
+		mockClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetGistsByGistID: mockResponse(t, http.StatusOK, mockGist),
+		})
+
+		client := github.NewClient(mockClient)
+		deps := BaseDeps{Client: client}
+		tool := GetGist(translations.NullTranslationHelper)
+		handler := tool.Handler(deps)
+
+		request := createMCPRequest(map[string]interface{}{
+			"gist_id": "gist1",
+		})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var gist github.Gist
+		err = json.Unmarshal([]byte(textContent.Text), &gist)
+		require.NoError(t, err)
+
+		assert.NotContains(t, *gist.Description, "onerror")
+	})
+}
+
 func Test_GetGist(t *testing.T) {
 	// Verify tool definition
 	serverTool := GetGist(translations.NullTranslationHelper)

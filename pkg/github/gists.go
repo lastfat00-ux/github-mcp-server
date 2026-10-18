@@ -9,6 +9,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -94,6 +95,10 @@ func ListGists(t translations.TranslationHelperFunc) inventory.ServerTool {
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list gists", resp, body), nil, nil
 			}
 
+			for i, g := range gists {
+				gists[i] = sanitizeGist(g)
+			}
+
 			r, err := json.Marshal(gists)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal response", err), nil, nil
@@ -152,6 +157,8 @@ func GetGist(t translations.TranslationHelperFunc) inventory.ServerTool {
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get gist", resp, body), nil, nil
 			}
 
+			gist = sanitizeGist(gist)
+
 			r, err := json.Marshal(gist)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal response", err), nil, nil
@@ -160,6 +167,17 @@ func GetGist(t translations.TranslationHelperFunc) inventory.ServerTool {
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+func sanitizeGist(gist *github.Gist) *github.Gist {
+	if gist == nil {
+		return nil
+	}
+	if gist.Description != nil {
+		// Defense in Depth: Sanitize Gist descriptions to prevent XSS attacks when rendered in downstream LLM clients.
+		gist.Description = github.Ptr(sanitize.Sanitize(*gist.Description))
+	}
+	return gist
 }
 
 // CreateGist creates a tool to create a new gist
