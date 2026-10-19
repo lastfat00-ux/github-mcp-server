@@ -1783,6 +1783,51 @@ func Test_ParseISOTimestamp(t *testing.T) {
 	}
 }
 
+func Test_GetIssueCommentsXSS(t *testing.T) {
+	serverTool := IssueRead(translations.NullTranslationHelper)
+
+	mockComments := []*github.IssueComment{
+		{
+			ID:   github.Ptr(int64(123)),
+			Body: github.Ptr("<script>alert('xss')</script><b>Safe comment</b>"),
+			User: &github.User{
+				Login: github.Ptr("attacker"),
+			},
+		},
+	}
+
+	mockedClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+		GetReposIssuesCommentsByOwnerByRepoByIssueNumber: mockResponse(t, http.StatusOK, mockComments),
+	})
+
+	client := github.NewClient(mockedClient)
+	deps := BaseDeps{
+		Client: client,
+	}
+	handler := serverTool.Handler(deps)
+
+	request := createMCPRequest(map[string]interface{}{
+		"method":       "get_comments",
+		"owner":        "owner",
+		"repo":         "repo",
+		"issue_number": float64(42),
+	})
+
+	result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+
+	textContent := getTextResult(t, result)
+	var returnedComments []*github.IssueComment
+	err = json.Unmarshal([]byte(textContent.Text), &returnedComments)
+	require.NoError(t, err)
+	require.Len(t, returnedComments, 1)
+
+	// Verify <script> tag is stripped and safe <b> tag is preserved
+	assert.NotContains(t, *returnedComments[0].Body, "<script>")
+	assert.Contains(t, *returnedComments[0].Body, "<b>Safe comment</b>")
+}
+
 func Test_GetIssueComments(t *testing.T) {
 	// Verify tool definition once
 	serverTool := IssueRead(translations.NullTranslationHelper)
