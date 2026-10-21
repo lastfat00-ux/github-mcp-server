@@ -9,6 +9,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -94,6 +95,11 @@ func ListGists(t translations.TranslationHelperFunc) inventory.ServerTool {
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list gists", resp, body), nil, nil
 			}
 
+			// Defense in Depth: Sanitize untrusted user-generated content in gists before returning to client.
+			for i := range gists {
+				gists[i] = sanitizeGist(gists[i])
+			}
+
 			r, err := json.Marshal(gists)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal response", err), nil, nil
@@ -152,6 +158,9 @@ func GetGist(t translations.TranslationHelperFunc) inventory.ServerTool {
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get gist", resp, body), nil, nil
 			}
 
+			// Defense in Depth: Sanitize untrusted user-generated content in gist before returning to client.
+			gist = sanitizeGist(gist)
+
 			r, err := json.Marshal(gist)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal response", err), nil, nil
@@ -160,6 +169,18 @@ func GetGist(t translations.TranslationHelperFunc) inventory.ServerTool {
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+// sanitizeGist filters invisible/control characters from untrusted Gist metadata while preserving plain-text formatting.
+func sanitizeGist(gist *github.Gist) *github.Gist {
+	if gist == nil {
+		return nil
+	}
+	if gist.Description != nil {
+		// Defense in Depth: Filter invisible control characters and BiDi overrides from description while preserving code snippets and angle brackets.
+		gist.Description = github.Ptr(sanitize.FilterInvisibleCharacters(*gist.Description))
+	}
+	return gist
 }
 
 // CreateGist creates a tool to create a new gist
