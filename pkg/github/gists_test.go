@@ -183,6 +183,76 @@ func Test_ListGists(t *testing.T) {
 	}
 }
 
+func Test_GistsSanitization(t *testing.T) {
+	rawDescription := "Fix \u200b\u202e <Button /> component"
+	expectedSanitizedDescription := "Fix  <Button /> component"
+
+	t.Run("ListGists filters invisible characters in description while preserving angle brackets", func(t *testing.T) {
+		mockGists := []*github.Gist{
+			{
+				ID:          github.Ptr("gist1"),
+				Description: github.Ptr(rawDescription),
+			},
+		}
+
+		mockClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetGists: mockResponse(t, http.StatusOK, mockGists),
+		})
+
+		client := github.NewClient(mockClient)
+		deps := BaseDeps{Client: client}
+		serverTool := ListGists(translations.NullTranslationHelper)
+		handler := serverTool.Handler(deps)
+
+		request := createMCPRequest(map[string]interface{}{})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returnedGists []*github.Gist
+		err = json.Unmarshal([]byte(textContent.Text), &returnedGists)
+		require.NoError(t, err)
+
+		require.Len(t, returnedGists, 1)
+		assert.Equal(t, expectedSanitizedDescription, *returnedGists[0].Description)
+		assert.Contains(t, *returnedGists[0].Description, "<Button />")
+		assert.NotContains(t, *returnedGists[0].Description, "\u200b")
+	})
+
+	t.Run("GetGist filters invisible characters in description while preserving angle brackets", func(t *testing.T) {
+		mockGist := github.Gist{
+			ID:          github.Ptr("gist1"),
+			Description: github.Ptr(rawDescription),
+		}
+
+		mockClient := MockHTTPClientWithHandlers(map[string]http.HandlerFunc{
+			GetGistsByGistID: mockResponse(t, http.StatusOK, mockGist),
+		})
+
+		client := github.NewClient(mockClient)
+		deps := BaseDeps{Client: client}
+		serverTool := GetGist(translations.NullTranslationHelper)
+		handler := serverTool.Handler(deps)
+
+		request := createMCPRequest(map[string]interface{}{
+			"gist_id": "gist1",
+		})
+		result, err := handler(ContextWithDeps(context.Background(), deps), &request)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		textContent := getTextResult(t, result)
+		var returnedGist github.Gist
+		err = json.Unmarshal([]byte(textContent.Text), &returnedGist)
+		require.NoError(t, err)
+
+		assert.Equal(t, expectedSanitizedDescription, *returnedGist.Description)
+		assert.Contains(t, *returnedGist.Description, "<Button />")
+		assert.NotContains(t, *returnedGist.Description, "\u200b")
+	})
+}
+
 func Test_GetGist(t *testing.T) {
 	// Verify tool definition
 	serverTool := GetGist(translations.NullTranslationHelper)
