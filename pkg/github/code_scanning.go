@@ -8,6 +8,7 @@ import (
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/inventory"
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -83,6 +84,7 @@ func GetCodeScanningAlert(t translations.TranslationHelperFunc) inventory.Server
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to get alert", resp, body), nil, nil
 			}
 
+			alert = sanitizeCodeScanningAlert(alert)
 			r, err := json.Marshal(alert)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal alert", err), nil, nil
@@ -186,6 +188,9 @@ func ListCodeScanningAlerts(t translations.TranslationHelperFunc) inventory.Serv
 				return ghErrors.NewGitHubAPIStatusErrorResponse(ctx, "failed to list alerts", resp, body), nil, nil
 			}
 
+			for i, a := range alerts {
+				alerts[i] = sanitizeCodeScanningAlert(a)
+			}
 			r, err := json.Marshal(alerts)
 			if err != nil {
 				return utils.NewToolResultErrorFromErr("failed to marshal alerts", err), nil, nil
@@ -194,4 +199,33 @@ func ListCodeScanningAlerts(t translations.TranslationHelperFunc) inventory.Serv
 			return utils.NewToolResultText(string(r)), nil, nil
 		},
 	)
+}
+
+// sanitizeCodeScanningAlert sanitizes user-controlled string fields in a code scanning alert.
+// Defense in Depth: Protects downstream LLM-based clients that render markdown/HTML directly from XSS attacks.
+func sanitizeCodeScanningAlert(alert *github.Alert) *github.Alert {
+	if alert == nil {
+		return nil
+	}
+	if alert.RuleDescription != nil {
+		alert.RuleDescription = github.Ptr(sanitize.Sanitize(*alert.RuleDescription))
+	}
+	if alert.DismissedComment != nil {
+		alert.DismissedComment = github.Ptr(sanitize.Sanitize(*alert.DismissedComment))
+	}
+	if alert.Rule != nil {
+		if alert.Rule.Description != nil {
+			alert.Rule.Description = github.Ptr(sanitize.Sanitize(*alert.Rule.Description))
+		}
+		if alert.Rule.FullDescription != nil {
+			alert.Rule.FullDescription = github.Ptr(sanitize.Sanitize(*alert.Rule.FullDescription))
+		}
+		if alert.Rule.Help != nil {
+			alert.Rule.Help = github.Ptr(sanitize.Sanitize(*alert.Rule.Help))
+		}
+	}
+	if alert.MostRecentInstance != nil && alert.MostRecentInstance.Message != nil && alert.MostRecentInstance.Message.Text != nil {
+		alert.MostRecentInstance.Message.Text = github.Ptr(sanitize.Sanitize(*alert.MostRecentInstance.Message.Text))
+	}
+	return alert
 }
