@@ -13,7 +13,7 @@ import (
 	"github.com/github/github-mcp-server/pkg/inventory"
 	"github.com/github/github-mcp-server/pkg/lockdown"
 	"github.com/github/github-mcp-server/pkg/octicons"
-	"github.com/github/github-mcp-server/pkg/sanitize"
+	"github.com/github/github-mcp-server/pkg/sanitize" // Sanitization utilities
 	"github.com/github/github-mcp-server/pkg/scopes"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/github/github-mcp-server/pkg/utils"
@@ -208,10 +208,11 @@ func fragmentToIssue(fragment IssueFragment) *github.Issue {
 	// Convert GraphQL labels to GitHub API labels format
 	var foundLabels []*github.Label
 	for _, labelNode := range fragment.Labels.Nodes {
+		// Sanitize plain-text label description against invisible control characters and BiDi overrides while preserving plain-text angle brackets
 		foundLabels = append(foundLabels, &github.Label{
 			Name:        github.Ptr(string(labelNode.Name)),
 			NodeID:      github.Ptr(string(labelNode.ID)),
-			Description: github.Ptr(string(labelNode.Description)),
+			Description: github.Ptr(sanitize.FilterInvisibleCharacters(string(labelNode.Description))),
 		})
 	}
 
@@ -523,11 +524,12 @@ func GetIssueLabels(ctx context.Context, client *githubv4.Client, owner string, 
 	// Extract label information
 	issueLabels := make([]map[string]any, len(query.Repository.Issue.Labels.Nodes))
 	for i, label := range query.Repository.Issue.Labels.Nodes {
+		// Sanitize plain-text label description against invisible control characters and BiDi overrides while preserving plain-text angle brackets
 		issueLabels[i] = map[string]any{
 			"id":          fmt.Sprintf("%v", label.ID),
 			"name":        string(label.Name),
 			"color":       string(label.Color),
-			"description": string(label.Description),
+			"description": sanitize.FilterInvisibleCharacters(string(label.Description)),
 		}
 	}
 
