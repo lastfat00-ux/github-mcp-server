@@ -1,6 +1,7 @@
 package github
 
 import (
+	"github.com/github/github-mcp-server/pkg/sanitize"
 	"github.com/google/go-github/v79/github"
 )
 
@@ -179,8 +180,9 @@ func convertToMinimalCommit(commit *github.RepositoryCommit, includeDiffs bool) 
 	}
 
 	if commit.Commit != nil {
+		// Filter invisible control characters and BiDi overrides from commit messages to protect downstream clients while preserving code snippets and angle brackets.
 		minimalCommit.Commit = &MinimalCommitInfo{
-			Message: commit.Commit.GetMessage(),
+			Message: sanitize.FilterInvisibleCharacters(commit.Commit.GetMessage()),
 		}
 
 		if commit.Commit.Author != nil {

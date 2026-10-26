@@ -175,3 +175,19 @@ func Test_GetRepositoryTree(t *testing.T) {
 		})
 	}
 }
+
+func Test_CommitMessageSanitization(t *testing.T) {
+	// Test that invisible control characters/BiDi overrides are removed while plain-text angle brackets and code snippets are preserved.
+	rawCommit := &github.RepositoryCommit{
+		SHA:     github.Ptr("1234567890abcdef"),
+		HTMLURL: github.Ptr("https://github.com/owner/repo/commit/1234567890abcdef"),
+		Commit: &github.Commit{
+			Message: github.Ptr("Fix\u200B issue with <Button /> and \u202Ahidden BiDi\u202C text"),
+		},
+	}
+
+	minimal := convertToMinimalCommit(rawCommit, false)
+	require.NotNil(t, minimal.Commit)
+
+	assert.Equal(t, "Fix issue with <Button /> and hidden BiDi text", minimal.Commit.Message)
+}
